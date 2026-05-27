@@ -1,16 +1,15 @@
 import { NextResponse } from "next/server";
-import { put, head, list } from "@vercel/blob";
+import { put, get, list } from "@vercel/blob";
 
 export async function GET() {
   const results: Record<string, unknown> = {
     tokenSet: !!process.env.BLOB_READ_WRITE_TOKEN,
-    tokenPrefix: process.env.BLOB_READ_WRITE_TOKEN?.slice(0, 10) + "...",
+    storeIdSet: !!process.env.BLOB_STORE_ID,
   };
 
-  // Test write
   try {
     const writeResult = await put("grocerylist/_health-check.json", JSON.stringify({ ok: true, ts: Date.now() }), {
-      access: "public",
+      access: "private",
       addRandomSuffix: false,
       allowOverwrite: true,
       contentType: "application/json",
@@ -20,15 +19,18 @@ export async function GET() {
     results.write = { success: false, error: String(err) };
   }
 
-  // Test read
   try {
-    const metadata = await head("grocerylist/_health-check.json");
-    results.read = { success: true, url: metadata.url, size: metadata.size };
+    const response = await get("grocerylist/_health-check.json", { access: "private" });
+    if (response && response.statusCode === 200) {
+      const text = await new Response(response.stream).text();
+      results.read = { success: true, content: text };
+    } else {
+      results.read = { success: false, error: "Blob not found or empty" };
+    }
   } catch (err) {
     results.read = { success: false, error: String(err) };
   }
 
-  // Test list
   try {
     const blobs = await list({ prefix: "grocerylist/" });
     results.list = {
