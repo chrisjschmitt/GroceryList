@@ -20,10 +20,6 @@ export async function syncToServer(): Promise<{ success: boolean }> {
       localGetRegularItems(),
     ]);
 
-    if (localGroceryItems.length === 0 && localRegularItems.length === 0) {
-      return { success: true };
-    }
-
     const res = await fetch("/api/sync", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
