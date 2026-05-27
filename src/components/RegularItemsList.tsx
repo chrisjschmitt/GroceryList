@@ -85,7 +85,7 @@ export default function RegularItemsList({
     if (!item) return;
     setContextMenu(null);
     setEditState({ type: "edit", category: item.category, itemId: id, value: currentName });
-    setTimeout(() => inputRef.current?.focus(), 50);
+    setTimeout(() => { inputRef.current?.focus(); inputRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, 50);
   };
 
   const handleDelete = async (id: string) => {
@@ -95,7 +95,7 @@ export default function RegularItemsList({
 
   const handleStartAdd = (category: string) => {
     setEditState({ type: "add", category, value: "" });
-    setTimeout(() => inputRef.current?.focus(), 50);
+    setTimeout(() => { inputRef.current?.focus(); inputRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }); }, 50);
   };
 
   const handleEditSubmit = async () => {
