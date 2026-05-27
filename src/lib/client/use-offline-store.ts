@@ -14,9 +14,10 @@ import {
   localUpdateRegularItem,
   localClearRegularItems,
 } from "./local-db";
-import { pullFromServer, syncToServer, SyncStatus } from "./sync";
+import { pullFromServer, pushDirtyToServer, syncAllToServer, SyncStatus, DirtyFlag } from "./sync";
 import { parseCsv } from "../csv-parser";
 
+const DEBOUNCE_MS = 3_000;
 const POLL_INTERVAL = 30_000;
 
 export interface OfflineStore {
@@ -43,26 +44,53 @@ export function useOfflineStore(): OfflineStore {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("synced");
   const [isOnline, setIsOnline] = useState(true);
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const dirtyRef = useRef<Set<DirtyFlag>>(new Set());
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushingRef = useRef(false);
 
   const markSynced = useCallback(() => {
     setSyncStatus("synced");
     setLastSynced(new Date());
   }, []);
 
-  const pushToServer = useCallback(async () => {
+  const flushDirty = useCallback(async () => {
+    if (flushingRef.current) return;
+    if (dirtyRef.current.size === 0) return;
+
+    flushingRef.current = true;
+    const toFlush = new Set(dirtyRef.current);
+    dirtyRef.current.clear();
+
     if (!navigator.onLine) {
       setSyncStatus("offline");
+      dirtyRef.current = new Set([...dirtyRef.current, ...toFlush]);
+      flushingRef.current = false;
       return;
     }
+
     setSyncStatus("syncing");
-    const result = await syncToServer();
+    const result = await pushDirtyToServer(toFlush);
+
     if (result.success) {
       markSynced();
     } else {
       setSyncStatus("offline");
+      dirtyRef.current = new Set([...dirtyRef.current, ...toFlush]);
     }
+    flushingRef.current = false;
   }, [markSynced]);
+
+  const schedulePush = useCallback((flag: DirtyFlag) => {
+    dirtyRef.current.add(flag);
+
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+    debounceRef.current = setTimeout(() => {
+      flushDirty();
+    }, DEBOUNCE_MS);
+  }, [flushDirty]);
 
   const pullAndUpdate = useCallback(async () => {
     if (!navigator.onLine) return;
@@ -108,7 +136,7 @@ export function useOfflineStore(): OfflineStore {
         setRegularItems(serverData.regularItems);
         markSynced();
       } else if (localHasData) {
-        const result = await syncToServer();
+        const result = await syncAllToServer();
         if (result.success) {
           markSynced();
         } else {
@@ -123,38 +151,42 @@ export function useOfflineStore(): OfflineStore {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Poll for changes from other devices every 30 seconds
+  // Poll for changes from other devices
   useEffect(() => {
-    pollingRef.current = setInterval(() => {
-      if (navigator.onLine) {
+    const interval = setInterval(() => {
+      if (navigator.onLine && dirtyRef.current.size === 0) {
         pullAndUpdate();
       }
     }, POLL_INTERVAL);
 
-    return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-      }
-    };
+    return () => clearInterval(interval);
   }, [pullAndUpdate]);
 
-  // Also refresh when the tab becomes visible (user switches back)
+  // Refresh when tab becomes visible
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === "visible" && navigator.onLine) {
-        pullAndUpdate();
+        if (dirtyRef.current.size > 0) {
+          flushDirty();
+        } else {
+          pullAndUpdate();
+        }
       }
     };
 
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [pullAndUpdate]);
+  }, [pullAndUpdate, flushDirty]);
 
-  // Online/offline event listeners
+  // Online/offline listeners
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      pushToServer();
+      if (dirtyRef.current.size > 0) {
+        flushDirty();
+      } else {
+        pullAndUpdate();
+      }
     };
     const handleOffline = () => {
       setIsOnline(false);
@@ -167,7 +199,8 @@ export function useOfflineStore(): OfflineStore {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, [pushToServer]);
+  }, [flushDirty, pullAndUpdate]);
+
 
   const addGroceryItem = useCallback(async (name: string, quantity: number, unit: string) => {
     const existing = await localGetGroceryItems();
@@ -207,8 +240,8 @@ export function useOfflineStore(): OfflineStore {
 
     await localAddGroceryItem(newItem);
     setGroceryItems((prev) => [...prev, newItem]);
-    await pushToServer();
-  }, [pushToServer]);
+    schedulePush("grocery");
+  }, [schedulePush]);
 
   const toggleGroceryItem = useCallback(async (id: string) => {
     setGroceryItems((prev) =>
@@ -221,14 +254,14 @@ export function useOfflineStore(): OfflineStore {
       await localUpdateGroceryItem({ ...item, checked: !item.checked });
     }
 
-    await pushToServer();
-  }, [pushToServer]);
+    schedulePush("grocery");
+  }, [schedulePush]);
 
   const removeGroceryItem = useCallback(async (id: string) => {
     setGroceryItems((prev) => prev.filter((i) => i.id !== id));
     await localRemoveGroceryItem(id);
-    await pushToServer();
-  }, [pushToServer]);
+    schedulePush("grocery");
+  }, [schedulePush]);
 
   const removeGroceryItemByName = useCallback(async (name: string) => {
     const items = await localGetGroceryItems();
@@ -236,21 +269,21 @@ export function useOfflineStore(): OfflineStore {
     if (item) {
       setGroceryItems((prev) => prev.filter((i) => i.id !== item.id));
       await localRemoveGroceryItem(item.id);
-      await pushToServer();
+      schedulePush("grocery");
     }
-  }, [pushToServer]);
+  }, [schedulePush]);
 
   const clearCheckedGroceryItems = useCallback(async () => {
     setGroceryItems((prev) => prev.filter((i) => !i.checked));
     await localClearCheckedGroceryItems();
-    await pushToServer();
-  }, [pushToServer]);
+    schedulePush("grocery");
+  }, [schedulePush]);
 
   const clearAllGroceryItems = useCallback(async () => {
     setGroceryItems([]);
     await localClearAllGroceryItems();
-    await pushToServer();
-  }, [pushToServer]);
+    schedulePush("grocery");
+  }, [schedulePush]);
 
   const toggleRegularItem = useCallback(async (id: string) => {
     setRegularItems((prev) =>
@@ -263,8 +296,8 @@ export function useOfflineStore(): OfflineStore {
       await localUpdateRegularItem({ ...item, selected: !item.selected });
     }
 
-    await pushToServer();
-  }, [pushToServer]);
+    schedulePush("regular");
+  }, [schedulePush]);
 
   const uploadCsv = useCallback(async (file: File): Promise<{ count: number; errors: string[] }> => {
     const content = await file.text();
@@ -276,16 +309,16 @@ export function useOfflineStore(): OfflineStore {
 
     await localSetRegularItems(items);
     setRegularItems(items);
-    await pushToServer();
+    schedulePush("regular");
 
     return { count: items.length, errors };
-  }, [pushToServer]);
+  }, [schedulePush]);
 
   const clearRegularItems = useCallback(async () => {
     setRegularItems([]);
     await localClearRegularItems();
-    await pushToServer();
-  }, [pushToServer]);
+    schedulePush("regular");
+  }, [schedulePush]);
 
   const addSelectedToGroceryList = useCallback(async (selected: RegularItem[]) => {
     const currentItems = await localGetGroceryItems();
@@ -303,8 +336,8 @@ export function useOfflineStore(): OfflineStore {
       }
     }
     setRegularItems((prev) => prev.map((i) => ({ ...i, selected: false })));
-    await pushToServer();
-  }, [addGroceryItem, pushToServer]);
+    schedulePush("regular");
+  }, [addGroceryItem, schedulePush]);
 
   return {
     groceryItems,
