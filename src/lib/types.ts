@@ -25,3 +25,10 @@ export interface GroceryItem {
 export interface GroceryList {
   items: GroceryItem[];
 }
+
+export interface RegularItem {
+  id: string;
+  category: string;
+  name: string;
+  selected: boolean;
+}

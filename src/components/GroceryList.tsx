@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { GroceryItem } from "@/lib/types";
+import { GroceryItem, RegularItem } from "@/lib/types";
 import AddItemForm from "./AddItemForm";
 import GroceryItemRow from "./GroceryItemRow";
+import RegularItemsList from "./RegularItemsList";
 
 export default function GroceryList() {
   const [items, setItems] = useState<GroceryItem[]>([]);
@@ -47,6 +48,24 @@ export default function GroceryList() {
       }
     } catch {
       setError("Failed to add item");
+    }
+  };
+
+  const handleAddFromRegularList = async (regularItems: RegularItem[]) => {
+    for (const ri of regularItems) {
+      try {
+        const res = await fetch("/api/items", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: ri.name, quantity: 1, unit: "unit" }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          setItems((prev) => [...prev, data.item]);
+        }
+      } catch {
+        // continue with remaining items
+      }
     }
   };
 
@@ -103,77 +122,96 @@ export default function GroceryList() {
   }
 
   return (
-    <div className="space-y-6">
-      <AddItemForm onAdd={handleAdd} />
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {/* Left panel: Regular Items (CSV upload + checklist) */}
+      <section>
+        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <span>📋</span>
+          <span>Regular Items</span>
+        </h2>
+        <RegularItemsList onAddToGroceryList={handleAddFromRegularList} />
+      </section>
 
-      {error && (
-        <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">
-          {error}
-          <button onClick={() => setError(null)} className="ml-2 underline">
-            Dismiss
-          </button>
-        </div>
-      )}
+      {/* Right panel: Shopping List */}
+      <section>
+        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <span>🛍️</span>
+          <span>Shopping List</span>
+        </h2>
 
-      {items.length > 0 && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-gray-500">
-            {uncheckedItems.length} item{uncheckedItems.length !== 1 ? "s" : ""} remaining
-            {totalEstimate > 0 && (
-              <span className="ml-2 font-semibold text-emerald-600">
-                Est. total: ${totalEstimate.toFixed(2)}
-              </span>
-            )}
-          </p>
+        <div className="space-y-4">
+          <AddItemForm onAdd={handleAdd} />
+
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">
+              {error}
+              <button onClick={() => setError(null)} className="ml-2 underline">
+                Dismiss
+              </button>
+            </div>
+          )}
+
+          {items.length > 0 && (
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-gray-500">
+                {uncheckedItems.length} item{uncheckedItems.length !== 1 ? "s" : ""} remaining
+                {totalEstimate > 0 && (
+                  <span className="ml-2 font-semibold text-emerald-600">
+                    Est. total: ${totalEstimate.toFixed(2)}
+                  </span>
+                )}
+              </p>
+              {checkedItems.length > 0 && (
+                <button
+                  onClick={handleClearChecked}
+                  className="text-sm text-gray-400 hover:text-red-500 transition-colors"
+                >
+                  Clear {checkedItems.length} checked
+                </button>
+              )}
+            </div>
+          )}
+
+          <div className="space-y-2">
+            {uncheckedItems.map((item) => (
+              <GroceryItemRow
+                key={item.id}
+                item={item}
+                onToggle={handleToggle}
+                onRemove={handleRemove}
+              />
+            ))}
+          </div>
+
           {checkedItems.length > 0 && (
-            <button
-              onClick={handleClearChecked}
-              className="text-sm text-gray-400 hover:text-red-500 transition-colors"
-            >
-              Clear {checkedItems.length} checked
-            </button>
+            <div className="space-y-2 pt-4 border-t border-gray-100">
+              <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider">
+                Checked off
+              </h3>
+              {checkedItems.map((item) => (
+                <GroceryItemRow
+                  key={item.id}
+                  item={item}
+                  onToggle={handleToggle}
+                  onRemove={handleRemove}
+                />
+              ))}
+            </div>
+          )}
+
+          {items.length === 0 && (
+            <div className="text-center py-12">
+              <div className="text-4xl mb-3">🛒</div>
+              <h3 className="text-base font-medium text-gray-900 mb-1">
+                Shopping list is empty
+              </h3>
+              <p className="text-sm text-gray-500">
+                Add items manually above or check items from your regular list
+              </p>
+            </div>
           )}
         </div>
-      )}
-
-      <div className="space-y-2">
-        {uncheckedItems.map((item) => (
-          <GroceryItemRow
-            key={item.id}
-            item={item}
-            onToggle={handleToggle}
-            onRemove={handleRemove}
-          />
-        ))}
-      </div>
-
-      {checkedItems.length > 0 && (
-        <div className="space-y-2 pt-4 border-t border-gray-100">
-          <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider">
-            Checked off
-          </h3>
-          {checkedItems.map((item) => (
-            <GroceryItemRow
-              key={item.id}
-              item={item}
-              onToggle={handleToggle}
-              onRemove={handleRemove}
-            />
-          ))}
-        </div>
-      )}
-
-      {items.length === 0 && (
-        <div className="text-center py-16">
-          <div className="text-5xl mb-4">🛒</div>
-          <h3 className="text-lg font-medium text-gray-900 mb-1">
-            Your grocery list is empty
-          </h3>
-          <p className="text-gray-500">
-            Add items above to compare prices across local stores
-          </p>
-        </div>
-      )}
+      </section>
     </div>
   );
 }
