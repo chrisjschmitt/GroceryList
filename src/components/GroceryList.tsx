@@ -1,149 +1,27 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { GroceryItem, RegularItem } from "@/lib/types";
+import { useMemo } from "react";
+import { useOfflineStore } from "@/lib/client/use-offline-store";
 import AddItemForm from "./AddItemForm";
 import GroceryItemRow from "./GroceryItemRow";
 import RegularItemsList from "./RegularItemsList";
+import SyncIndicator from "./SyncIndicator";
 
 export default function GroceryList() {
-  const [items, setItems] = useState<GroceryItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      try {
-        const res = await fetch("/api/items");
-        const data = await res.json();
-        if (!cancelled) {
-          setItems(data.items);
-          setError(null);
-        }
-      } catch {
-        if (!cancelled) setError("Failed to load items");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    load();
-    return () => { cancelled = true; };
-  }, []);
+  const store = useOfflineStore();
 
   const shoppingListNames = useMemo(
-    () => new Set(items.map((i) => i.name.toLowerCase())),
-    [items]
+    () => new Set(store.groceryItems.map((i) => i.name.toLowerCase())),
+    [store.groceryItems]
   );
 
   const handleAdd = async (name: string, quantity: number, unit: string) => {
-    if (shoppingListNames.has(name.toLowerCase())) {
-      setError(`"${name}" is already in your shopping list`);
-      return;
-    }
-
-    try {
-      const res = await fetch("/api/items", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, quantity, unit }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setItems((prev) => [...prev, data.item]);
-      } else {
-        setError(data.error || "Failed to add item");
-      }
-    } catch {
-      setError("Failed to add item");
-    }
+    if (shoppingListNames.has(name.toLowerCase())) return;
+    await store.addGroceryItem(name, quantity, unit);
   };
 
-  const handleAddFromRegularList = async (regularItems: RegularItem[]) => {
-    const newItems = regularItems.filter(
-      (ri) => !shoppingListNames.has(ri.name.toLowerCase())
-    );
-
-    for (const ri of newItems) {
-      try {
-        const res = await fetch("/api/items", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: ri.name, quantity: 1, unit: "unit" }),
-        });
-        const data = await res.json();
-        if (res.ok) {
-          setItems((prev) => [...prev, data.item]);
-        }
-      } catch {
-        // continue with remaining items
-      }
-    }
-  };
-
-  const handleRemoveByName = async (name: string) => {
-    const item = items.find((i) => i.name.toLowerCase() === name.toLowerCase());
-    if (!item) return;
-
-    try {
-      const res = await fetch(`/api/items/${item.id}`, { method: "DELETE" });
-      if (res.ok) {
-        setItems((prev) => prev.filter((i) => i.id !== item.id));
-      }
-    } catch {
-      setError("Failed to remove item");
-    }
-  };
-
-  const handleToggle = async (id: string) => {
-    try {
-      const res = await fetch(`/api/items/${id}`, { method: "PATCH" });
-      const data = await res.json();
-      if (res.ok) {
-        setItems((prev) => prev.map((i) => (i.id === id ? data.item : i)));
-      }
-    } catch {
-      setError("Failed to update item");
-    }
-  };
-
-  const handleRemove = async (id: string) => {
-    try {
-      const res = await fetch(`/api/items/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        setItems((prev) => prev.filter((i) => i.id !== id));
-      }
-    } catch {
-      setError("Failed to remove item");
-    }
-  };
-
-  const handleClearChecked = async () => {
-    try {
-      const res = await fetch("/api/items", { method: "DELETE" });
-      if (res.ok) {
-        setItems((prev) => prev.filter((i) => !i.checked));
-      }
-    } catch {
-      setError("Failed to clear items");
-    }
-  };
-
-  const handleClearAll = async () => {
-    for (const item of items) {
-      try {
-        await fetch(`/api/items/${item.id}`, { method: "DELETE" });
-      } catch {
-        // continue
-      }
-    }
-    setItems([]);
-  };
-
-  const uncheckedItems = items.filter((i) => !i.checked);
-  const checkedItems = items.filter((i) => i.checked);
+  const uncheckedItems = store.groceryItems.filter((i) => !i.checked);
+  const checkedItems = store.groceryItems.filter((i) => i.checked);
 
   const totalEstimate = uncheckedItems.reduce((sum, item) => {
     if (item.bestPrice) {
@@ -152,117 +30,108 @@ export default function GroceryList() {
     return sum;
   }, 0);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600" />
-      </div>
-    );
-  }
-
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-      {/* Left panel: Regular Items checklist */}
-      <section className="order-2 lg:order-1">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <span>📋</span>
-          <span>Regular Items</span>
-        </h2>
-        <RegularItemsList
-          onAddToGroceryList={handleAddFromRegularList}
-          onRemoveFromGroceryList={handleRemoveByName}
-          alreadyInList={shoppingListNames}
-        />
-      </section>
+    <div className="space-y-6">
+      <SyncIndicator status={store.syncStatus} isOnline={store.isOnline} />
 
-      {/* Right panel: Shopping List */}
-      <section className="order-1 lg:order-2">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <span>🛍️</span>
-          <span>Shopping List</span>
-        </h2>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Regular Items checklist */}
+        <section className="order-2 lg:order-1">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <span>📋</span>
+            <span>Regular Items</span>
+          </h2>
+          <RegularItemsList
+            items={store.regularItems}
+            onToggle={store.toggleRegularItem}
+            onAddToGroceryList={store.addSelectedToGroceryList}
+            onRemoveFromGroceryList={store.removeGroceryItemByName}
+            onUploadCsv={store.uploadCsv}
+            onClear={store.clearRegularItems}
+            alreadyInList={shoppingListNames}
+          />
+        </section>
 
-        <div className="space-y-4">
-          <AddItemForm onAdd={handleAdd} />
+        {/* Shopping List */}
+        <section className="order-1 lg:order-2">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <span>🛍️</span>
+            <span>Shopping List</span>
+          </h2>
 
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm">
-              {error}
-              <button onClick={() => setError(null)} className="ml-2 underline">
-                Dismiss
-              </button>
-            </div>
-          )}
+          <div className="space-y-4">
+            <AddItemForm onAdd={handleAdd} />
 
-          {items.length > 0 && (
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-500">
-                {uncheckedItems.length} item{uncheckedItems.length !== 1 ? "s" : ""} remaining
-                {totalEstimate > 0 && (
-                  <span className="ml-2 font-semibold text-emerald-600">
-                    Est. total: ${totalEstimate.toFixed(2)}
-                  </span>
-                )}
-              </p>
-              <div className="flex gap-3">
-                {checkedItems.length > 0 && (
+            {store.groceryItems.length > 0 && (
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-gray-500">
+                  {uncheckedItems.length} item{uncheckedItems.length !== 1 ? "s" : ""} remaining
+                  {totalEstimate > 0 && (
+                    <span className="ml-2 font-semibold text-emerald-600">
+                      Est. total: ${totalEstimate.toFixed(2)}
+                    </span>
+                  )}
+                </p>
+                <div className="flex gap-3">
+                  {checkedItems.length > 0 && (
+                    <button
+                      onClick={store.clearCheckedGroceryItems}
+                      className="text-sm text-gray-400 hover:text-red-500 transition-colors"
+                    >
+                      Clear checked
+                    </button>
+                  )}
                   <button
-                    onClick={handleClearChecked}
+                    onClick={store.clearAllGroceryItems}
                     className="text-sm text-gray-400 hover:text-red-500 transition-colors"
                   >
-                    Clear checked
+                    Clear all
                   </button>
-                )}
-                <button
-                  onClick={handleClearAll}
-                  className="text-sm text-gray-400 hover:text-red-500 transition-colors"
-                >
-                  Clear all
-                </button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          <div className="space-y-2">
-            {uncheckedItems.map((item) => (
-              <GroceryItemRow
-                key={item.id}
-                item={item}
-                onToggle={handleToggle}
-                onRemove={handleRemove}
-              />
-            ))}
-          </div>
-
-          {checkedItems.length > 0 && (
-            <div className="space-y-2 pt-4 border-t border-gray-100">
-              <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider">
-                Checked off — click to restore
-              </h3>
-              {checkedItems.map((item) => (
+            <div className="space-y-2">
+              {uncheckedItems.map((item) => (
                 <GroceryItemRow
                   key={item.id}
                   item={item}
-                  onToggle={handleToggle}
-                  onRemove={handleRemove}
+                  onToggle={store.toggleGroceryItem}
+                  onRemove={store.removeGroceryItem}
                 />
               ))}
             </div>
-          )}
 
-          {items.length === 0 && (
-            <div className="text-center py-12">
-              <div className="text-4xl mb-3">🛒</div>
-              <h3 className="text-base font-medium text-gray-900 mb-1">
-                Shopping list is empty
-              </h3>
-              <p className="text-sm text-gray-500">
-                Add items manually above or check items from your regular list
-              </p>
-            </div>
-          )}
-        </div>
-      </section>
+            {checkedItems.length > 0 && (
+              <div className="space-y-2 pt-4 border-t border-gray-100">
+                <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider">
+                  Checked off — click to restore
+                </h3>
+                {checkedItems.map((item) => (
+                  <GroceryItemRow
+                    key={item.id}
+                    item={item}
+                    onToggle={store.toggleGroceryItem}
+                    onRemove={store.removeGroceryItem}
+                  />
+                ))}
+              </div>
+            )}
+
+            {store.groceryItems.length === 0 && (
+              <div className="text-center py-12">
+                <div className="text-4xl mb-3">🛒</div>
+                <h3 className="text-base font-medium text-gray-900 mb-1">
+                  Shopping list is empty
+                </h3>
+                <p className="text-sm text-gray-500">
+                  Add items manually above or check items from your regular list
+                </p>
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
     </div>
   );
 }
