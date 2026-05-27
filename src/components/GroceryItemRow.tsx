@@ -18,7 +18,7 @@ export default function GroceryItemRow({ item, onToggle, onRemove }: GroceryItem
     <div
       className={`group p-4 rounded-xl border transition-all ${
         item.checked
-          ? "bg-gray-50 border-gray-200 opacity-60"
+          ? "bg-gray-50 border-gray-200 hover:border-amber-300 hover:bg-amber-50/30"
           : "bg-white border-gray-200 hover:border-emerald-300 hover:shadow-sm"
       }`}
     >
@@ -27,10 +27,11 @@ export default function GroceryItemRow({ item, onToggle, onRemove }: GroceryItem
           onClick={() => onToggle(item.id)}
           className={`mt-1 w-5 h-5 rounded-md border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
             item.checked
-              ? "bg-emerald-500 border-emerald-500 text-white"
+              ? "bg-emerald-500 border-emerald-500 text-white hover:bg-amber-500 hover:border-amber-500"
               : "border-gray-300 hover:border-emerald-400"
           }`}
-          aria-label={`Mark ${item.name} as ${item.checked ? "unchecked" : "checked"}`}
+          aria-label={item.checked ? `Uncheck ${item.name} (restore to list)` : `Check off ${item.name}`}
+          title={item.checked ? "Click to restore to active list" : "Check off"}
         >
           {item.checked && (
             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
@@ -43,7 +44,7 @@ export default function GroceryItemRow({ item, onToggle, onRemove }: GroceryItem
           <div className="flex items-baseline gap-2">
             <h3
               className={`text-base font-medium ${
-                item.checked ? "line-through text-gray-400" : "text-gray-900"
+                item.checked ? "line-through text-gray-400 group-hover:text-gray-600" : "text-gray-900"
               }`}
             >
               {item.name}
@@ -51,9 +52,14 @@ export default function GroceryItemRow({ item, onToggle, onRemove }: GroceryItem
             <span className="text-sm text-gray-500">
               {item.quantity} {item.unit}
             </span>
-            {totalBest && (
+            {totalBest && !item.checked && (
               <span className="text-sm font-semibold text-emerald-600">
                 est. ${totalBest}
+              </span>
+            )}
+            {item.checked && (
+              <span className="text-xs text-amber-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                click checkbox to restore
               </span>
             )}
           </div>
