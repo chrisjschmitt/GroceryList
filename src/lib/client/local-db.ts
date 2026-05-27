@@ -101,6 +101,11 @@ export async function localUpdateRegularItem(item: RegularItem): Promise<void> {
   await db.put("regularItems", item);
 }
 
+export async function localRemoveRegularItem(id: string): Promise<void> {
+  const db = await getLocalDb();
+  await db.delete("regularItems", id);
+}
+
 export async function localClearRegularItems(): Promise<void> {
   const db = await getLocalDb();
   const tx = db.transaction("regularItems", "readwrite");
