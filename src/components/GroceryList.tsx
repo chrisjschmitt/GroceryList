@@ -163,7 +163,7 @@ export default function GroceryList() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
       {/* Left panel: Regular Items checklist */}
-      <section>
+      <section className="order-2 lg:order-1">
         <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
           <span>📋</span>
           <span>Regular Items</span>
@@ -176,7 +176,7 @@ export default function GroceryList() {
       </section>
 
       {/* Right panel: Shopping List */}
-      <section>
+      <section className="order-1 lg:order-2">
         <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
           <span>🛍️</span>
           <span>Shopping List</span>
