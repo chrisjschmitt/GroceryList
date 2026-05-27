@@ -32,7 +32,7 @@ export default function GroceryList() {
 
   return (
     <div className="space-y-6">
-      <SyncIndicator status={store.syncStatus} isOnline={store.isOnline} />
+      <SyncIndicator status={store.syncStatus} isOnline={store.isOnline} lastSynced={store.lastSynced} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Regular Items checklist */}
