@@ -8,11 +8,7 @@ interface PriceComparisonProps {
 }
 
 export default function PriceComparison({ prices, bestPrice }: PriceComparisonProps) {
-  if (prices.length === 0) {
-    return (
-      <p className="text-sm text-gray-400 italic">No price data available</p>
-    );
-  }
+  if (prices.length === 0) return null;
 
   return (
     <div className="flex flex-wrap gap-2 mt-2">

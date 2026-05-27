@@ -35,19 +35,17 @@ export default function GroceryList() {
       <SyncIndicator status={store.syncStatus} isOnline={store.isOnline} lastSynced={store.lastSynced} hasPendingChanges={store.hasPendingChanges} onSave={store.saveChanges} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Regular Items checklist */}
+        {/* Grocery Items checklist */}
         <section className="order-2 lg:order-1">
           <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
             <span>📋</span>
-            <span>Regular Items</span>
+            <span>Grocery Items</span>
           </h2>
           <RegularItemsList
             items={store.regularItems}
-            onToggle={store.toggleRegularItem}
             onAddToGroceryList={store.addSelectedToGroceryList}
             onRemoveFromGroceryList={store.removeGroceryItemByName}
             onUploadCsv={store.uploadCsv}
-            onClear={store.clearRegularItems}
             alreadyInList={shoppingListNames}
           />
         </section>
@@ -125,7 +123,7 @@ export default function GroceryList() {
                   Shopping list is empty
                 </h3>
                 <p className="text-sm text-gray-500">
-                  Add items manually above or check items from your regular list
+                  Add items manually above or tap items from your grocery list
                 </p>
               </div>
             )}
