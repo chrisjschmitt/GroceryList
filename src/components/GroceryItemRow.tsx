@@ -1,7 +1,6 @@
 "use client";
 
 import { GroceryItem } from "@/lib/types";
-import PriceComparison from "./PriceComparison";
 
 interface GroceryItemRowProps {
   item: GroceryItem;
@@ -10,10 +9,6 @@ interface GroceryItemRowProps {
 }
 
 export default function GroceryItemRow({ item, onToggle, onRemove }: GroceryItemRowProps) {
-  const totalBest = item.bestPrice
-    ? (item.bestPrice.price * item.quantity).toFixed(2)
-    : null;
-
   return (
     <div className="group flex items-start gap-2 py-0.5">
       <button
@@ -34,18 +29,9 @@ export default function GroceryItemRow({ item, onToggle, onRemove }: GroceryItem
       </button>
 
       <div className="flex-1 min-w-0">
-        <div className="flex items-baseline gap-1.5">
-          <span className={`text-sm leading-tight ${item.checked ? "line-through text-gray-400" : "text-gray-900"}`}>
-            {item.name}
-          </span>
-          <span className="text-xs text-gray-400">
-            {item.quantity} {item.unit}
-          </span>
-          {totalBest && !item.checked && (
-            <span className="text-xs font-medium text-emerald-600">${totalBest}</span>
-          )}
-        </div>
-        {!item.checked && <PriceComparison prices={item.prices} bestPrice={item.bestPrice} />}
+        <span className={`text-sm leading-tight ${item.checked ? "line-through text-gray-400" : "text-gray-900"}`}>
+          {item.name}
+        </span>
       </div>
 
       <button
