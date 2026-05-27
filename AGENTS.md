@@ -34,6 +34,11 @@ A personal grocery list web app that checks local stores for the lowest prices f
 - The grocery store module (`src/lib/grocery-store.ts`) holds items in-memory per server process
 - Client components are in `src/components/`; they fetch from the API routes
 
+### Testing policy
+
+- **No GUI/manual testing by the agent.** The user handles all browser-based testing.
+- The agent should verify changes with `npm run lint`, `npm run test`, and `npm run build` only.
+
 ### Gotchas
 
 - The in-memory store means adding items via `curl` and via the browser share state within the same server process, but data is lost on restart
