@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { SyncStatus } from "@/lib/client/sync";
 
 interface SyncIndicatorProps {
@@ -21,14 +21,30 @@ function timeAgo(date: Date): string {
   return `${hours}h ago`;
 }
 
+function useTimeAgo(date: Date | null): string {
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    if (!date) return;
+    const interval = setInterval(() => setTick((t) => t + 1), 10_000);
+    return () => clearInterval(interval);
+  }, [date]);
+
+  if (!date) return "";
+  return timeAgo(date);
+}
+
 export default function SyncIndicator({ status, isOnline, lastSynced, hasPendingChanges, onSave }: SyncIndicatorProps) {
   const [saving, setSaving] = useState(false);
+  const ago = useTimeAgo(lastSynced);
 
   const handleSave = async () => {
     setSaving(true);
     await onSave();
     setSaving(false);
   };
+
+  const lastSyncedLabel = ago ? ` · last saved ${ago}` : "";
 
   if (saving) {
     return (
@@ -43,7 +59,7 @@ export default function SyncIndicator({ status, isOnline, lastSynced, hasPending
     return (
       <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border text-amber-600 bg-amber-50 border-amber-200">
         <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-        <span>Unsaved changes</span>
+        <span>Unsaved changes{lastSyncedLabel}</span>
         <button
           onClick={handleSave}
           className="ml-1 px-2 py-0.5 bg-amber-600 text-white rounded-full text-xs hover:bg-amber-700 transition-colors"
@@ -58,7 +74,7 @@ export default function SyncIndicator({ status, isOnline, lastSynced, hasPending
     return (
       <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border text-amber-700 bg-amber-50 border-amber-200">
         <span className="w-2 h-2 rounded-full bg-amber-400" />
-        <span>Offline{hasPendingChanges ? " — unsaved changes" : ""}</span>
+        <span>Offline{hasPendingChanges ? " — unsaved changes" : ""}{lastSyncedLabel}</span>
       </div>
     );
   }
@@ -66,7 +82,7 @@ export default function SyncIndicator({ status, isOnline, lastSynced, hasPending
   return (
     <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border text-emerald-700 bg-emerald-50 border-emerald-200">
       <span className="w-2 h-2 rounded-full bg-emerald-400" />
-      <span>Synced{lastSynced ? ` · ${timeAgo(lastSynced)}` : ""}</span>
+      <span>Synced{ago ? ` · ${ago}` : ""}</span>
     </div>
   );
 }
