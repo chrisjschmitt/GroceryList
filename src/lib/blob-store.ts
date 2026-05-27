@@ -1,4 +1,4 @@
-import { put, head } from "@vercel/blob";
+import { put, get } from "@vercel/blob";
 import { GroceryItem, RegularItem } from "./types";
 
 const GROCERY_BLOB = "grocerylist/grocery-items.json";
@@ -6,10 +6,13 @@ const REGULAR_BLOB = "grocerylist/regular-items.json";
 
 async function readBlob<T>(pathname: string, fallback: T): Promise<T> {
   try {
-    const metadata = await head(pathname);
-    const res = await fetch(metadata.url, { cache: "no-store" });
-    if (!res.ok) return fallback;
-    return (await res.json()) as T;
+    const response = await get(pathname, {
+      access: "private",
+      
+    });
+    if (!response || response.statusCode !== 200) return fallback;
+    const text = await new Response(response.stream).text();
+    return JSON.parse(text) as T;
   } catch {
     return fallback;
   }
@@ -17,7 +20,7 @@ async function readBlob<T>(pathname: string, fallback: T): Promise<T> {
 
 async function writeBlob<T>(pathname: string, data: T): Promise<void> {
   await put(pathname, JSON.stringify(data), {
-    access: "public",
+    access: "private",
     addRandomSuffix: false,
     allowOverwrite: true,
     contentType: "application/json",
