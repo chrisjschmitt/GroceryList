@@ -2,10 +2,21 @@
 
 import { useMemo, useState } from "react";
 import { useOfflineStore } from "@/lib/client/use-offline-store";
+import { GroceryItem } from "@/lib/types";
 import AddItemForm from "./AddItemForm";
 import GroceryItemRow from "./GroceryItemRow";
 import RegularItemsList from "./RegularItemsList";
 import SyncIndicator from "./SyncIndicator";
+
+function groupByCategory(items: GroceryItem[]): [string, GroceryItem[]][] {
+  const groups: Record<string, GroceryItem[]> = {};
+  for (const item of items) {
+    const cat = item.category || "Other";
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push(item);
+  }
+  return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+}
 
 export default function GroceryList() {
   const store = useOfflineStore();
@@ -32,6 +43,7 @@ export default function GroceryList() {
 
   const uncheckedItems = store.groceryItems.filter((i) => !i.checked);
   const checkedItems = store.groceryItems.filter((i) => i.checked);
+  const uncheckedByCategory = groupByCategory(uncheckedItems);
 
   const totalEstimate = uncheckedItems.reduce((sum, item) => {
     if (item.bestPrice) {
@@ -131,22 +143,29 @@ export default function GroceryList() {
 
             {store.groceryItems.length > 0 ? (
               <div className="flex-1 min-h-0 border border-gray-200 rounded-xl bg-white overflow-y-auto px-3 py-2">
-                <div className="divide-y divide-gray-100">
-                  {uncheckedItems.map((item) => (
-                    <GroceryItemRow
-                      key={item.id}
-                      item={item}
-                      onToggle={store.toggleGroceryItem}
-                      onRemove={store.removeGroceryItem}
-                    />
-                  ))}
-                </div>
+                {uncheckedByCategory.map(([category, categoryItems]) => (
+                  <div key={category} className="mb-2 last:mb-0">
+                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider pt-1 pb-0.5">
+                      {category}
+                    </h4>
+                    <div className="divide-y divide-gray-100">
+                      {categoryItems.map((item) => (
+                        <GroceryItemRow
+                          key={item.id}
+                          item={item}
+                          onToggle={store.toggleGroceryItem}
+                          onRemove={store.removeGroceryItem}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
 
                 {checkedItems.length > 0 && (
                   <div className="mt-2 pt-2 border-t border-gray-200">
-                    <h3 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
+                    <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wider mb-1">
                       Checked off — click to restore
-                    </h3>
+                    </h4>
                     <div className="divide-y divide-gray-100">
                       {checkedItems.map((item) => (
                         <GroceryItemRow

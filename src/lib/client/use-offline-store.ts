@@ -27,7 +27,7 @@ export interface OfflineStore {
   lastSynced: Date | null;
   hasPendingChanges: boolean;
   saveChanges: () => Promise<void>;
-  addGroceryItem: (name: string, quantity: number, unit: string) => Promise<void>;
+  addGroceryItem: (name: string, quantity: number, unit: string, category?: string) => Promise<void>;
   toggleGroceryItem: (id: string) => Promise<void>;
   removeGroceryItem: (id: string) => Promise<void>;
   removeGroceryItemByName: (name: string) => Promise<void>;
@@ -179,7 +179,7 @@ export function useOfflineStore(): OfflineStore {
 
   // --- Mutations ---
 
-  const addGroceryItem = useCallback(async (name: string, quantity: number, unit: string) => {
+  const addGroceryItem = useCallback(async (name: string, quantity: number, unit: string, category?: string) => {
     const existing = await localGetGroceryItems();
     if (existing.some((i) => i.name.toLowerCase() === name.toLowerCase())) {
       return;
@@ -191,6 +191,7 @@ export function useOfflineStore(): OfflineStore {
     const newItem: GroceryItem = {
       id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       name,
+      category: category || "Other",
       quantity,
       unit,
       checked: false,
@@ -204,7 +205,7 @@ export function useOfflineStore(): OfflineStore {
         const res = await fetch("/api/items", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, quantity, unit }),
+          body: JSON.stringify({ name, quantity, unit, category }),
         });
         if (res.ok) {
           const data = await res.json();
@@ -303,7 +304,7 @@ export function useOfflineStore(): OfflineStore {
     const newItems = selected.filter((i) => !currentNames.has(i.name.toLowerCase()));
 
     for (const ri of newItems) {
-      await addGroceryItem(ri.name, 1, "unit");
+      await addGroceryItem(ri.name, 1, "unit", ri.category);
     }
 
     const allRegular = await localGetRegularItems();
