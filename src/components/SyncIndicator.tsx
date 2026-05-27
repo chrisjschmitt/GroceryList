@@ -19,11 +19,11 @@ function timeAgo(date: Date): string {
 }
 
 export default function SyncIndicator({ status, isOnline, lastSynced }: SyncIndicatorProps) {
-  if (status === "syncing") {
+  if (status === "syncing" && isOnline) {
     return (
-      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border text-blue-600 bg-blue-50 border-blue-200">
-        <span className="animate-spin">↻</span>
-        <span>Syncing...</span>
+      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border text-amber-600 bg-amber-50 border-amber-200">
+        <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+        <span>Unsaved changes</span>
       </div>
     );
   }
