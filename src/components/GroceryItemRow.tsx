@@ -15,10 +15,10 @@ export default function GroceryItemRow({ item, onToggle, onRemove }: GroceryItem
     : null;
 
   return (
-    <div className="group flex items-start gap-2.5 py-1.5">
+    <div className="group flex items-start gap-2 py-0.5">
       <button
         onClick={() => onToggle(item.id)}
-        className={`mt-0.5 w-4.5 h-4.5 rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
+        className={`mt-0.5 w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center transition-colors ${
           item.checked
             ? "bg-emerald-500 border-emerald-500 text-white hover:bg-amber-500 hover:border-amber-500"
             : "border-gray-300 hover:border-emerald-400"
@@ -34,27 +34,18 @@ export default function GroceryItemRow({ item, onToggle, onRemove }: GroceryItem
       </button>
 
       <div className="flex-1 min-w-0">
-        <div className="flex items-baseline gap-2">
-          <span
-            className={`text-sm ${
-              item.checked ? "line-through text-gray-400" : "text-gray-900"
-            }`}
-          >
+        <div className="flex items-baseline gap-1.5">
+          <span className={`text-sm leading-tight ${item.checked ? "line-through text-gray-400" : "text-gray-900"}`}>
             {item.name}
           </span>
           <span className="text-xs text-gray-400">
             {item.quantity} {item.unit}
           </span>
           {totalBest && !item.checked && (
-            <span className="text-xs font-medium text-emerald-600">
-              ${totalBest}
-            </span>
+            <span className="text-xs font-medium text-emerald-600">${totalBest}</span>
           )}
         </div>
-
-        {!item.checked && (
-          <PriceComparison prices={item.prices} bestPrice={item.bestPrice} />
-        )}
+        {!item.checked && <PriceComparison prices={item.prices} bestPrice={item.bestPrice} />}
       </div>
 
       <button
@@ -62,7 +53,7 @@ export default function GroceryItemRow({ item, onToggle, onRemove }: GroceryItem
         className="opacity-0 group-hover:opacity-100 p-0.5 text-gray-300 hover:text-red-500 transition-all"
         aria-label={`Remove ${item.name}`}
       >
-        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
         </svg>
       </button>
