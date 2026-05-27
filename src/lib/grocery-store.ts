@@ -1,34 +1,12 @@
-import { GroceryItem, StorePrice } from "./types";
+import { GroceryItem } from "./types";
 import { lookupPrices, findBestPrice } from "./store-data";
-import { getDb } from "./db";
+import { blobGetGroceryItems, blobSetGroceryItems } from "./blob-store";
 
-export function getItems(): GroceryItem[] {
-  const db = getDb();
-  const rows = db.prepare("SELECT * FROM grocery_items ORDER BY created_at DESC").all() as Array<{
-    id: string;
-    name: string;
-    quantity: number;
-    unit: string;
-    checked: number;
-    prices: string;
-    best_price: string | null;
-    created_at: string;
-  }>;
-
-  return rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    quantity: row.quantity,
-    unit: row.unit,
-    checked: row.checked === 1,
-    prices: JSON.parse(row.prices) as StorePrice[],
-    bestPrice: row.best_price ? (JSON.parse(row.best_price) as StorePrice) : undefined,
-    createdAt: row.created_at,
-  }));
+export async function getItems(): Promise<GroceryItem[]> {
+  return blobGetGroceryItems();
 }
 
-export function addItem(name: string, quantity: number, unit: string): GroceryItem {
-  const db = getDb();
+export async function addItem(name: string, quantity: number, unit: string): Promise<GroceryItem> {
   const prices = lookupPrices(name);
   const bestPrice = findBestPrice(prices);
 
@@ -43,61 +21,40 @@ export function addItem(name: string, quantity: number, unit: string): GroceryIt
     createdAt: new Date().toISOString(),
   };
 
-  db.prepare(`
-    INSERT INTO grocery_items (id, name, quantity, unit, checked, prices, best_price, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    item.id,
-    item.name,
-    item.quantity,
-    item.unit,
-    0,
-    JSON.stringify(item.prices),
-    item.bestPrice ? JSON.stringify(item.bestPrice) : null,
-    item.createdAt
-  );
+  const items = await blobGetGroceryItems();
+  items.push(item);
+  await blobSetGroceryItems(items);
 
   return item;
 }
 
-export function toggleItem(id: string): GroceryItem | null {
-  const db = getDb();
-  const row = db.prepare("SELECT * FROM grocery_items WHERE id = ?").get(id) as {
-    id: string;
-    name: string;
-    quantity: number;
-    unit: string;
-    checked: number;
-    prices: string;
-    best_price: string | null;
-    created_at: string;
-  } | undefined;
+export async function toggleItem(id: string): Promise<GroceryItem | null> {
+  const items = await blobGetGroceryItems();
+  const item = items.find((i) => i.id === id);
+  if (!item) return null;
 
-  if (!row) return null;
+  item.checked = !item.checked;
+  await blobSetGroceryItems(items);
 
-  const newChecked = row.checked === 1 ? 0 : 1;
-  db.prepare("UPDATE grocery_items SET checked = ? WHERE id = ?").run(newChecked, id);
-
-  return {
-    id: row.id,
-    name: row.name,
-    quantity: row.quantity,
-    unit: row.unit,
-    checked: newChecked === 1,
-    prices: JSON.parse(row.prices) as StorePrice[],
-    bestPrice: row.best_price ? (JSON.parse(row.best_price) as StorePrice) : undefined,
-    createdAt: row.created_at,
-  };
+  return { ...item };
 }
 
-export function removeItem(id: string): boolean {
-  const db = getDb();
-  const result = db.prepare("DELETE FROM grocery_items WHERE id = ?").run(id);
-  return result.changes > 0;
+export async function removeItem(id: string): Promise<boolean> {
+  const items = await blobGetGroceryItems();
+  const index = items.findIndex((i) => i.id === id);
+  if (index === -1) return false;
+
+  items.splice(index, 1);
+  await blobSetGroceryItems(items);
+
+  return true;
 }
 
-export function clearChecked(): number {
-  const db = getDb();
-  const result = db.prepare("DELETE FROM grocery_items WHERE checked = 1").run();
-  return result.changes;
+export async function clearChecked(): Promise<number> {
+  const items = await blobGetGroceryItems();
+  const before = items.length;
+  const remaining = items.filter((i) => !i.checked);
+  await blobSetGroceryItems(remaining);
+
+  return before - remaining.length;
 }

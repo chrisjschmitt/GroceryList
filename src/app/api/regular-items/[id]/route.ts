@@ -6,7 +6,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const item = toggleRegularItem(id);
+  const item = await toggleRegularItem(id);
 
   if (!item) {
     return NextResponse.json({ error: "Item not found" }, { status: 404 });

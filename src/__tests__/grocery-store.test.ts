@@ -1,15 +1,22 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { getItems, addItem, toggleItem, removeItem, clearChecked } from "@/lib/grocery-store";
+import { describe, it, expect, beforeEach, vi } from "vitest";
+
+let groceryData: unknown[] = [];
+
+vi.mock("@/lib/blob-store", () => ({
+  blobGetGroceryItems: vi.fn(async () => [...groceryData]),
+  blobSetGroceryItems: vi.fn(async (items: unknown[]) => { groceryData = [...items]; }),
+}));
+
+const { getItems, addItem, toggleItem, removeItem, clearChecked } = await import("@/lib/grocery-store");
 
 describe("grocery-store", () => {
   beforeEach(() => {
-    const items = getItems();
-    items.forEach((i) => removeItem(i.id));
+    groceryData = [];
   });
 
   describe("addItem", () => {
-    it("should add an item with correct properties", () => {
-      const item = addItem("Milk", 1, "gal");
+    it("should add an item with correct properties", async () => {
+      const item = await addItem("Milk", 1, "gal");
       expect(item.name).toBe("Milk");
       expect(item.quantity).toBe(1);
       expect(item.unit).toBe("gal");
@@ -18,66 +25,66 @@ describe("grocery-store", () => {
       expect(item.createdAt).toBeTruthy();
     });
 
-    it("should look up prices when adding an item", () => {
-      const item = addItem("eggs", 1, "dozen");
+    it("should look up prices when adding an item", async () => {
+      const item = await addItem("eggs", 1, "dozen");
       expect(item.prices.length).toBeGreaterThan(0);
       expect(item.bestPrice).toBeDefined();
     });
 
-    it("should add item to the list", () => {
-      addItem("Bread", 1, "unit");
-      const items = getItems();
+    it("should add item to the list", async () => {
+      await addItem("Bread", 1, "unit");
+      const items = await getItems();
       expect(items.length).toBeGreaterThanOrEqual(1);
       expect(items.some((i) => i.name === "Bread")).toBe(true);
     });
   });
 
   describe("toggleItem", () => {
-    it("should toggle checked state", () => {
-      const item = addItem("Butter", 1, "unit");
+    it("should toggle checked state", async () => {
+      const item = await addItem("Butter", 1, "unit");
       expect(item.checked).toBe(false);
 
-      const toggled = toggleItem(item.id);
+      const toggled = await toggleItem(item.id);
       expect(toggled?.checked).toBe(true);
 
-      const toggledBack = toggleItem(item.id);
+      const toggledBack = await toggleItem(item.id);
       expect(toggledBack?.checked).toBe(false);
     });
 
-    it("should return null for non-existent item", () => {
-      expect(toggleItem("nonexistent")).toBeNull();
+    it("should return null for non-existent item", async () => {
+      expect(await toggleItem("nonexistent")).toBeNull();
     });
   });
 
   describe("removeItem", () => {
-    it("should remove an existing item", () => {
-      const item = addItem("Cheese", 1, "unit");
-      expect(removeItem(item.id)).toBe(true);
-      const items = getItems();
+    it("should remove an existing item", async () => {
+      const item = await addItem("Cheese", 1, "unit");
+      expect(await removeItem(item.id)).toBe(true);
+      const items = await getItems();
       expect(items.some((i) => i.id === item.id)).toBe(false);
     });
 
-    it("should return false for non-existent item", () => {
-      expect(removeItem("nonexistent")).toBe(false);
+    it("should return false for non-existent item", async () => {
+      expect(await removeItem("nonexistent")).toBe(false);
     });
   });
 
   describe("clearChecked", () => {
-    it("should remove all checked items", () => {
-      const item1 = addItem("Apple", 1, "unit");
-      const item2 = addItem("Banana", 1, "unit");
-      toggleItem(item1.id);
+    it("should remove all checked items", async () => {
+      const item1 = await addItem("Apple", 1, "unit");
+      const item2 = await addItem("Banana", 1, "unit");
+      await toggleItem(item1.id);
 
-      const removed = clearChecked();
+      const removed = await clearChecked();
       expect(removed).toBeGreaterThanOrEqual(1);
-      const items = getItems();
+      const items = await getItems();
       expect(items.some((i) => i.id === item1.id)).toBe(false);
       expect(items.some((i) => i.id === item2.id)).toBe(true);
     });
 
-    it("should return 0 when nothing is checked", () => {
-      addItem("Rice", 1, "bag");
-      expect(clearChecked()).toBe(0);
+    it("should return 0 when nothing is checked", async () => {
+      await addItem("Rice", 1, "bag");
+      expect(await clearChecked()).toBe(0);
     });
   });
 });
