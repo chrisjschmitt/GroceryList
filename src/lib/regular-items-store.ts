@@ -1,96 +1,43 @@
 import { RegularItem } from "./types";
-import { getDb } from "./db";
+import { blobGetRegularItems, blobSetRegularItems } from "./blob-store";
 
-export function getRegularItems(): RegularItem[] {
-  const db = getDb();
-  const rows = db.prepare("SELECT * FROM regular_items ORDER BY category, name").all() as Array<{
-    id: string;
-    category: string;
-    name: string;
-    selected: number;
-  }>;
-
-  return rows.map((row) => ({
-    id: row.id,
-    category: row.category,
-    name: row.name,
-    selected: row.selected === 1,
-  }));
+export async function getRegularItems(): Promise<RegularItem[]> {
+  return blobGetRegularItems();
 }
 
-export function setRegularItems(items: RegularItem[]): void {
-  const db = getDb();
-  const insertMany = db.transaction((items: RegularItem[]) => {
-    db.prepare("DELETE FROM regular_items").run();
-    const stmt = db.prepare(
-      "INSERT INTO regular_items (id, category, name, selected) VALUES (?, ?, ?, ?)"
-    );
-    for (const item of items) {
-      stmt.run(item.id, item.category, item.name, item.selected ? 1 : 0);
-    }
-  });
-  insertMany(items);
+export async function setRegularItems(items: RegularItem[]): Promise<void> {
+  await blobSetRegularItems(items);
 }
 
-export function addRegularItems(items: RegularItem[]): RegularItem[] {
-  const db = getDb();
-  const stmt = db.prepare(
-    "INSERT INTO regular_items (id, category, name, selected) VALUES (?, ?, ?, ?)"
-  );
-  const insertMany = db.transaction((items: RegularItem[]) => {
-    for (const item of items) {
-      stmt.run(item.id, item.category, item.name, item.selected ? 1 : 0);
-    }
-  });
-  insertMany(items);
-  return getRegularItems();
+export async function addRegularItems(items: RegularItem[]): Promise<RegularItem[]> {
+  const existing = await blobGetRegularItems();
+  const merged = [...existing, ...items];
+  await blobSetRegularItems(merged);
+  return merged;
 }
 
-export function toggleRegularItem(id: string): RegularItem | null {
-  const db = getDb();
-  const row = db.prepare("SELECT * FROM regular_items WHERE id = ?").get(id) as {
-    id: string;
-    category: string;
-    name: string;
-    selected: number;
-  } | undefined;
+export async function toggleRegularItem(id: string): Promise<RegularItem | null> {
+  const items = await blobGetRegularItems();
+  const item = items.find((i) => i.id === id);
+  if (!item) return null;
 
-  if (!row) return null;
+  item.selected = !item.selected;
+  await blobSetRegularItems(items);
 
-  const newSelected = row.selected === 1 ? 0 : 1;
-  db.prepare("UPDATE regular_items SET selected = ? WHERE id = ?").run(newSelected, id);
-
-  return {
-    id: row.id,
-    category: row.category,
-    name: row.name,
-    selected: newSelected === 1,
-  };
+  return { ...item };
 }
 
-export function clearRegularItems(): void {
-  const db = getDb();
-  db.prepare("DELETE FROM regular_items").run();
+export async function clearRegularItems(): Promise<void> {
+  await blobSetRegularItems([]);
 }
 
-export function getSelectedItems(): RegularItem[] {
-  const db = getDb();
-  const rows = db.prepare("SELECT * FROM regular_items WHERE selected = 1 ORDER BY category, name").all() as Array<{
-    id: string;
-    category: string;
-    name: string;
-    selected: number;
-  }>;
-
-  return rows.map((row) => ({
-    id: row.id,
-    category: row.category,
-    name: row.name,
-    selected: true,
-  }));
+export async function getSelectedItems(): Promise<RegularItem[]> {
+  const items = await blobGetRegularItems();
+  return items.filter((i) => i.selected);
 }
 
-export function deselectAll(): void {
-  const db = getDb();
-  db.prepare("UPDATE regular_items SET selected = 0").run();
+export async function deselectAll(): Promise<void> {
+  const items = await blobGetRegularItems();
+  items.forEach((i) => { i.selected = false; });
+  await blobSetRegularItems(items);
 }

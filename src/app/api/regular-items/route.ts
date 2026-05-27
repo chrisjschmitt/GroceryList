@@ -7,7 +7,7 @@ import {
 } from "@/lib/regular-items-store";
 
 export async function GET() {
-  const items = getRegularItems();
+  const items = await getRegularItems();
   return NextResponse.json({ items });
 }
 
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    setRegularItems(items);
+    await setRegularItems(items);
     return NextResponse.json({ items, errors }, { status: 201 });
   }
 
@@ -44,6 +44,6 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE() {
-  clearRegularItems();
+  await clearRegularItems();
   return NextResponse.json({ success: true });
 }

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getItems, addItem, clearChecked } from "@/lib/grocery-store";
 
 export async function GET() {
-  const items = getItems();
+  const items = await getItems();
   return NextResponse.json({ items });
 }
 
@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Item name is required" }, { status: 400 });
   }
 
-  const item = addItem(
+  const item = await addItem(
     name.trim(),
     typeof quantity === "number" ? quantity : 1,
     typeof unit === "string" ? unit : "unit"
@@ -24,6 +24,6 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE() {
-  const removed = clearChecked();
+  const removed = await clearChecked();
   return NextResponse.json({ removed });
 }
