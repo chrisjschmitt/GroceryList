@@ -151,10 +151,14 @@ export function useOfflineStore(): OfflineStore {
     return () => clearInterval(interval);
   }, [pullAndUpdate]);
 
-  // Pull when tab becomes visible
+  // Auto-save when leaving, pull when returning
   useEffect(() => {
     const handleVisibility = () => {
-      if (document.visibilityState === "visible" && navigator.onLine) {
+      if (document.visibilityState === "hidden") {
+        if (dirtyRef.current.size > 0 && navigator.onLine) {
+          saveChanges();
+        }
+      } else if (document.visibilityState === "visible" && navigator.onLine) {
         if (dirtyRef.current.size === 0) {
           pullAndUpdate();
         }
@@ -163,7 +167,7 @@ export function useOfflineStore(): OfflineStore {
 
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [pullAndUpdate]);
+  }, [pullAndUpdate, saveChanges]);
 
   // Online/offline listeners
   useEffect(() => {
