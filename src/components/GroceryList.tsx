@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { GroceryItem, RegularItem } from "@/lib/types";
 import AddItemForm from "./AddItemForm";
 import GroceryItemRow from "./GroceryItemRow";
@@ -33,7 +33,17 @@ export default function GroceryList() {
     return () => { cancelled = true; };
   }, []);
 
+  const shoppingListNames = useMemo(
+    () => new Set(items.map((i) => i.name.toLowerCase())),
+    [items]
+  );
+
   const handleAdd = async (name: string, quantity: number, unit: string) => {
+    if (shoppingListNames.has(name.toLowerCase())) {
+      setError(`"${name}" is already in your shopping list`);
+      return;
+    }
+
     try {
       const res = await fetch("/api/items", {
         method: "POST",
@@ -52,7 +62,11 @@ export default function GroceryList() {
   };
 
   const handleAddFromRegularList = async (regularItems: RegularItem[]) => {
-    for (const ri of regularItems) {
+    const newItems = regularItems.filter(
+      (ri) => !shoppingListNames.has(ri.name.toLowerCase())
+    );
+
+    for (const ri of newItems) {
       try {
         const res = await fetch("/api/items", {
           method: "POST",
@@ -103,6 +117,17 @@ export default function GroceryList() {
     }
   };
 
+  const handleClearAll = async () => {
+    for (const item of items) {
+      try {
+        await fetch(`/api/items/${item.id}`, { method: "DELETE" });
+      } catch {
+        // continue
+      }
+    }
+    setItems([]);
+  };
+
   const uncheckedItems = items.filter((i) => !i.checked);
   const checkedItems = items.filter((i) => i.checked);
 
@@ -123,13 +148,16 @@ export default function GroceryList() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-      {/* Left panel: Regular Items (CSV upload + checklist) */}
+      {/* Left panel: Regular Items checklist */}
       <section>
         <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
           <span>📋</span>
           <span>Regular Items</span>
         </h2>
-        <RegularItemsList onAddToGroceryList={handleAddFromRegularList} />
+        <RegularItemsList
+          onAddToGroceryList={handleAddFromRegularList}
+          alreadyInList={shoppingListNames}
+        />
       </section>
 
       {/* Right panel: Shopping List */}
@@ -161,14 +189,22 @@ export default function GroceryList() {
                   </span>
                 )}
               </p>
-              {checkedItems.length > 0 && (
+              <div className="flex gap-3">
+                {checkedItems.length > 0 && (
+                  <button
+                    onClick={handleClearChecked}
+                    className="text-sm text-gray-400 hover:text-red-500 transition-colors"
+                  >
+                    Clear checked
+                  </button>
+                )}
                 <button
-                  onClick={handleClearChecked}
+                  onClick={handleClearAll}
                   className="text-sm text-gray-400 hover:text-red-500 transition-colors"
                 >
-                  Clear {checkedItems.length} checked
+                  Clear all
                 </button>
-              )}
+              </div>
             </div>
           )}
 
