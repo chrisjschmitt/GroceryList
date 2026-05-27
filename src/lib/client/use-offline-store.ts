@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { GroceryItem, RegularItem, StorePrice } from "../types";
 import {
   localGetGroceryItems,
@@ -17,11 +17,14 @@ import {
 import { pullFromServer, syncToServer, SyncStatus } from "./sync";
 import { parseCsv } from "../csv-parser";
 
+const POLL_INTERVAL = 30_000;
+
 export interface OfflineStore {
   groceryItems: GroceryItem[];
   regularItems: RegularItem[];
   syncStatus: SyncStatus;
   isOnline: boolean;
+  lastSynced: Date | null;
   addGroceryItem: (name: string, quantity: number, unit: string) => Promise<void>;
   toggleGroceryItem: (id: string) => Promise<void>;
   removeGroceryItem: (id: string) => Promise<void>;
@@ -39,16 +42,37 @@ export function useOfflineStore(): OfflineStore {
   const [regularItems, setRegularItems] = useState<RegularItem[]>([]);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("synced");
   const [isOnline, setIsOnline] = useState(true);
+  const [lastSynced, setLastSynced] = useState<Date | null>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Push current IndexedDB state to server. Fire-and-forget on failure.
+  const markSynced = useCallback(() => {
+    setSyncStatus("synced");
+    setLastSynced(new Date());
+  }, []);
+
   const pushToServer = useCallback(async () => {
     if (!navigator.onLine) {
       setSyncStatus("offline");
       return;
     }
+    setSyncStatus("syncing");
     const result = await syncToServer();
-    setSyncStatus(result.success ? "synced" : "offline");
-  }, []);
+    if (result.success) {
+      markSynced();
+    } else {
+      setSyncStatus("offline");
+    }
+  }, [markSynced]);
+
+  const pullAndUpdate = useCallback(async () => {
+    if (!navigator.onLine) return;
+    const serverData = await pullFromServer();
+    if (serverData) {
+      setGroceryItems(serverData.groceryItems);
+      setRegularItems(serverData.regularItems);
+      markSynced();
+    }
+  }, [markSynced]);
 
   // Load from IndexedDB on mount, then reconcile with server
   useEffect(() => {
@@ -67,10 +91,11 @@ export function useOfflineStore(): OfflineStore {
         return;
       }
 
+      setSyncStatus("syncing");
       const serverData = await pullFromServer();
 
       if (!serverData) {
-        // Server unreachable — keep local data
+        setSyncStatus("offline");
         return;
       }
 
@@ -79,21 +104,51 @@ export function useOfflineStore(): OfflineStore {
       const localHasData = localGrocery.length > 0 || localRegular.length > 0;
 
       if (serverHasData) {
-        // Server has data — use it as source of truth
         setGroceryItems(serverData.groceryItems);
         setRegularItems(serverData.regularItems);
-        setSyncStatus("synced");
+        markSynced();
       } else if (localHasData) {
-        // Server empty, local has data — push local to server
         const result = await syncToServer();
-        setSyncStatus(result.success ? "synced" : "offline");
+        if (result.success) {
+          markSynced();
+        } else {
+          setSyncStatus("offline");
+        }
       } else {
-        setSyncStatus("synced");
+        markSynced();
       }
     }
 
     init();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Poll for changes from other devices every 30 seconds
+  useEffect(() => {
+    pollingRef.current = setInterval(() => {
+      if (navigator.onLine) {
+        pullAndUpdate();
+      }
+    }, POLL_INTERVAL);
+
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+      }
+    };
+  }, [pullAndUpdate]);
+
+  // Also refresh when the tab becomes visible (user switches back)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible" && navigator.onLine) {
+        pullAndUpdate();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [pullAndUpdate]);
 
   // Online/offline event listeners
   useEffect(() => {
@@ -134,7 +189,6 @@ export function useOfflineStore(): OfflineStore {
       createdAt: new Date().toISOString(),
     };
 
-    // Try to get prices from server
     if (navigator.onLine) {
       try {
         const res = await fetch("/api/items", {
@@ -222,8 +276,6 @@ export function useOfflineStore(): OfflineStore {
 
     await localSetRegularItems(items);
     setRegularItems(items);
-
-    // Immediately push to server so data is available on other devices
     await pushToServer();
 
     return { count: items.length, errors };
@@ -259,6 +311,7 @@ export function useOfflineStore(): OfflineStore {
     regularItems,
     syncStatus,
     isOnline,
+    lastSynced,
     addGroceryItem,
     toggleGroceryItem,
     removeGroceryItem,
