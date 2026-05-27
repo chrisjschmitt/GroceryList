@@ -58,7 +58,7 @@ export function useOfflineStore(): OfflineStore {
         }
         setSyncStatus("syncing");
         const result = await syncToServer();
-        setSyncStatus(result.success ? "synced" : "error");
+        setSyncStatus(result.success ? "synced" : "offline");
       }, 1000);
     };
   });
