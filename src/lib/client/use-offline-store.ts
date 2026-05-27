@@ -17,7 +17,7 @@ import {
 import { pullFromServer, pushDirtyToServer, syncAllToServer, SyncStatus, DirtyFlag } from "./sync";
 import { parseCsv } from "../csv-parser";
 
-const SYNC_INTERVAL = 30_000;
+const POLL_INTERVAL = 60_000;
 
 export interface OfflineStore {
   groceryItems: GroceryItem[];
@@ -25,6 +25,8 @@ export interface OfflineStore {
   syncStatus: SyncStatus;
   isOnline: boolean;
   lastSynced: Date | null;
+  hasPendingChanges: boolean;
+  saveChanges: () => Promise<void>;
   addGroceryItem: (name: string, quantity: number, unit: string) => Promise<void>;
   toggleGroceryItem: (id: string) => Promise<void>;
   removeGroceryItem: (id: string) => Promise<void>;
@@ -43,49 +45,50 @@ export function useOfflineStore(): OfflineStore {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("synced");
   const [isOnline, setIsOnline] = useState(true);
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
+  const [hasPendingChanges, setHasPendingChanges] = useState(false);
 
   const dirtyRef = useRef<Set<DirtyFlag>>(new Set());
 
   const markSynced = useCallback(() => {
     setSyncStatus("synced");
     setLastSynced(new Date());
+    setHasPendingChanges(false);
   }, []);
 
   const markDirty = useCallback((flag: DirtyFlag) => {
     dirtyRef.current.add(flag);
-    setSyncStatus("syncing");
+    setHasPendingChanges(true);
   }, []);
 
-  // Single sync tick: push dirty changes OR pull fresh data
-  const syncTick = useCallback(async () => {
+  const saveChanges = useCallback(async () => {
+    if (dirtyRef.current.size === 0) return;
     if (!navigator.onLine) {
       setSyncStatus("offline");
       return;
     }
 
-    if (dirtyRef.current.size > 0) {
-      // Push local changes to server
-      const toFlush = new Set(dirtyRef.current);
-      dirtyRef.current.clear();
+    const toFlush = new Set(dirtyRef.current);
+    dirtyRef.current.clear();
 
-      setSyncStatus("syncing");
-      const result = await pushDirtyToServer(toFlush);
+    setSyncStatus("syncing");
+    const result = await pushDirtyToServer(toFlush);
 
-      if (result.success) {
-        markSynced();
-      } else {
-        // Put flags back for next tick
-        toFlush.forEach((f) => dirtyRef.current.add(f));
-        setSyncStatus("offline");
-      }
+    if (result.success) {
+      markSynced();
     } else {
-      // No local changes — pull from server (picks up changes from other devices)
-      const serverData = await pullFromServer();
-      if (serverData) {
-        setGroceryItems(serverData.groceryItems);
-        setRegularItems(serverData.regularItems);
-        markSynced();
-      }
+      toFlush.forEach((f) => dirtyRef.current.add(f));
+      setHasPendingChanges(true);
+      setSyncStatus("offline");
+    }
+  }, [markSynced]);
+
+  const pullAndUpdate = useCallback(async () => {
+    if (!navigator.onLine || dirtyRef.current.size > 0) return;
+    const serverData = await pullFromServer();
+    if (serverData) {
+      setGroceryItems(serverData.groceryItems);
+      setRegularItems(serverData.regularItems);
+      markSynced();
     }
   }, [markSynced]);
 
@@ -138,30 +141,29 @@ export function useOfflineStore(): OfflineStore {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Run sync tick every 30 seconds
+  // Poll for changes from other devices (read-only, free operations)
   useEffect(() => {
-    const interval = setInterval(syncTick, SYNC_INTERVAL);
+    const interval = setInterval(pullAndUpdate, POLL_INTERVAL);
     return () => clearInterval(interval);
-  }, [syncTick]);
+  }, [pullAndUpdate]);
 
-  // Also sync when tab becomes visible (user switches back to app)
+  // Pull when tab becomes visible
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === "visible" && navigator.onLine) {
-        syncTick();
+        if (dirtyRef.current.size === 0) {
+          pullAndUpdate();
+        }
       }
     };
 
     document.addEventListener("visibilitychange", handleVisibility);
     return () => document.removeEventListener("visibilitychange", handleVisibility);
-  }, [syncTick]);
+  }, [pullAndUpdate]);
 
   // Online/offline listeners
   useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      syncTick();
-    };
+    const handleOnline = () => setIsOnline(true);
     const handleOffline = () => {
       setIsOnline(false);
       setSyncStatus("offline");
@@ -173,9 +175,9 @@ export function useOfflineStore(): OfflineStore {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
     };
-  }, [syncTick]);
+  }, []);
 
-  // --- Mutations: write to IndexedDB + update React state + mark dirty ---
+  // --- Mutations ---
 
   const addGroceryItem = useCallback(async (name: string, quantity: number, unit: string) => {
     const existing = await localGetGroceryItems();
@@ -320,6 +322,8 @@ export function useOfflineStore(): OfflineStore {
     syncStatus,
     isOnline,
     lastSynced,
+    hasPendingChanges,
+    saveChanges,
     addGroceryItem,
     toggleGroceryItem,
     removeGroceryItem,
