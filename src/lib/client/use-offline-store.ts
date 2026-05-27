@@ -13,6 +13,7 @@ import {
   localSetRegularItems,
   localUpdateRegularItem,
   localClearRegularItems,
+  localRemoveRegularItem,
 } from "./local-db";
 import { pullFromServer, pushDirtyToServer, syncAllToServer, SyncStatus, DirtyFlag } from "./sync";
 import { parseCsv } from "../csv-parser";
@@ -36,6 +37,9 @@ export interface OfflineStore {
   toggleRegularItem: (id: string) => Promise<void>;
   uploadCsv: (file: File) => Promise<{ count: number; errors: string[] }>;
   clearRegularItems: () => Promise<void>;
+  addRegularItem: (name: string, category: string) => Promise<void>;
+  editRegularItem: (id: string, name: string) => Promise<void>;
+  deleteRegularItem: (id: string) => Promise<void>;
   addSelectedToGroceryList: (items: RegularItem[]) => Promise<void>;
 }
 
@@ -317,6 +321,34 @@ export function useOfflineStore(): OfflineStore {
     markDirty("regular");
   }, [addGroceryItem, markDirty]);
 
+  const addRegularItem = useCallback(async (name: string, category: string) => {
+    const newItem: RegularItem = {
+      id: `regular-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      category,
+      name,
+      selected: false,
+    };
+    await localUpdateRegularItem(newItem);
+    setRegularItems((prev) => [...prev, newItem]);
+    markDirty("regular");
+  }, [markDirty]);
+
+  const editRegularItem = useCallback(async (id: string, name: string) => {
+    const items = await localGetRegularItems();
+    const item = items.find((i) => i.id === id);
+    if (!item) return;
+    const updated = { ...item, name };
+    await localUpdateRegularItem(updated);
+    setRegularItems((prev) => prev.map((i) => (i.id === id ? updated : i)));
+    markDirty("regular");
+  }, [markDirty]);
+
+  const deleteRegularItem = useCallback(async (id: string) => {
+    await localRemoveRegularItem(id);
+    setRegularItems((prev) => prev.filter((i) => i.id !== id));
+    markDirty("regular");
+  }, [markDirty]);
+
   return {
     groceryItems,
     regularItems,
@@ -334,6 +366,9 @@ export function useOfflineStore(): OfflineStore {
     toggleRegularItem,
     uploadCsv,
     clearRegularItems,
+    addRegularItem,
+    editRegularItem,
+    deleteRegularItem,
     addSelectedToGroceryList,
   };
 }

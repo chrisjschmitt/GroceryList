@@ -99,6 +99,9 @@ export default function GroceryList() {
             onRemoveFromGroceryList={store.removeGroceryItemByName}
             onUploadCsv={store.uploadCsv}
             alreadyInList={shoppingListNames}
+            onAddItem={store.addRegularItem}
+            onEditItem={store.editRegularItem}
+            onDeleteItem={store.deleteRegularItem}
           />
         </section>
 
