@@ -45,13 +45,6 @@ export default function GroceryList() {
   const checkedItems = store.groceryItems.filter((i) => i.checked);
   const uncheckedByCategory = groupByCategory(uncheckedItems);
 
-  const totalEstimate = uncheckedItems.reduce((sum, item) => {
-    if (item.bestPrice) {
-      return sum + item.bestPrice.price * item.quantity;
-    }
-    return sum;
-  }, 0);
-
   return (
     <div className="space-y-6">
       <SyncIndicator status={store.syncStatus} isOnline={store.isOnline} lastSynced={store.lastSynced} hasPendingChanges={store.hasPendingChanges} onSave={store.saveChanges} />
@@ -119,11 +112,6 @@ export default function GroceryList() {
               <div className="flex items-center justify-between mt-3 mb-2">
                 <p className="text-sm text-gray-500">
                   {uncheckedItems.length} item{uncheckedItems.length !== 1 ? "s" : ""} remaining
-                  {totalEstimate > 0 && (
-                    <span className="ml-2 font-semibold text-emerald-600">
-                      Est. total: ${totalEstimate.toFixed(2)}
-                    </span>
-                  )}
                 </p>
                 <div className="flex gap-3">
                   {checkedItems.length > 0 && (
