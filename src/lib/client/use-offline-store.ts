@@ -63,7 +63,7 @@ export function useOfflineStore(): OfflineStore {
     };
   });
 
-  // Load from IndexedDB on mount, then try to pull from server
+  // Load from IndexedDB on mount, then reconcile with server
   useEffect(() => {
     async function init() {
       const [localGrocery, localRegular] = await Promise.all([
@@ -74,16 +74,36 @@ export function useOfflineStore(): OfflineStore {
       setGroceryItems(localGrocery);
       setRegularItems(localRegular);
 
-      if (navigator.onLine) {
-        const serverData = await pullFromServer();
-        if (serverData) {
-          setGroceryItems(serverData.groceryItems);
-          setRegularItems(serverData.regularItems);
-          setSyncStatus("synced");
-        }
-      } else {
+      if (!navigator.onLine) {
         setSyncStatus("offline");
         setIsOnline(false);
+        return;
+      }
+
+      const serverData = await pullFromServer();
+
+      if (!serverData) {
+        // Server unreachable — keep local data
+        return;
+      }
+
+      const serverHasGrocery = serverData.groceryItems.length > 0;
+      const serverHasRegular = serverData.regularItems.length > 0;
+      const localHasGrocery = localGrocery.length > 0;
+      const localHasRegular = localRegular.length > 0;
+
+      if (serverHasGrocery || serverHasRegular) {
+        // Server has data — use it (server is the cross-device source of truth)
+        setGroceryItems(serverData.groceryItems);
+        setRegularItems(serverData.regularItems);
+        setSyncStatus("synced");
+      } else if (localHasGrocery || localHasRegular) {
+        // Server is empty but local has data — push local to server
+        setSyncStatus("syncing");
+        const result = await syncToServer();
+        setSyncStatus(result.success ? "synced" : "offline");
+      } else {
+        setSyncStatus("synced");
       }
     }
 
@@ -281,27 +301,12 @@ export function useOfflineStore(): OfflineStore {
       return { count: 0, errors: errors.length > 0 ? errors : ["No valid items found"] };
     }
 
+    // Store locally
     await localSetRegularItems(items);
     setRegularItems(items);
 
-    if (navigator.onLine) {
-      try {
-        const formData = new FormData();
-        formData.append("file", file);
-        const res = await fetch("/api/regular-items", {
-          method: "POST",
-          body: formData,
-        });
-        if (res.ok) {
-          setSyncStatus("synced");
-        }
-      } catch {
-        setSyncStatus("offline");
-        scheduleSync();
-      }
-    } else {
-      setSyncStatus("offline");
-    }
+    // Sync full state to server (preserves IDs)
+    scheduleSync();
 
     return { count: items.length, errors };
   }, [scheduleSync]);
