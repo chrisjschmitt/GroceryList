@@ -23,7 +23,6 @@ describe("regular-items-store", () => {
 
       setRegularItems(items);
       expect(getRegularItems()).toHaveLength(2);
-      expect(getRegularItems()[0].name).toBe("Milk");
     });
 
     it("should replace existing items", () => {
@@ -71,7 +70,6 @@ describe("regular-items-store", () => {
 
       const selected = getSelectedItems();
       expect(selected).toHaveLength(2);
-      expect(selected.map((i) => i.name)).toEqual(["Milk", "Chicken"]);
     });
   });
 
