@@ -3,6 +3,7 @@
 import { useRef, useState, useCallback } from "react";
 import Link from "next/link";
 import { RegularItem } from "@/lib/types";
+import { PriceEntry } from "@/lib/blob-store";
 
 interface RegularItemsListProps {
   items: RegularItem[];
@@ -13,6 +14,7 @@ interface RegularItemsListProps {
   onAddItem: (name: string, category: string) => Promise<void>;
   onEditItem: (id: string, name: string) => Promise<void>;
   onDeleteItem: (id: string) => Promise<void>;
+  priceLookup: Map<string, PriceEntry>;
 }
 
 interface EditState {
@@ -31,6 +33,7 @@ export default function RegularItemsList({
   onAddItem,
   onEditItem,
   onDeleteItem,
+  priceLookup,
 }: RegularItemsListProps) {
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
@@ -233,7 +236,18 @@ export default function RegularItemsList({
                           )}
                         </span>
                         <span className="truncate">{item.name}</span>
-                        {inList && <span className="ml-auto text-[10px] flex-shrink-0">✕ remove</span>}
+                        {(() => {
+                          const price = priceLookup.get(item.name.toLowerCase());
+                          if (!price) return null;
+                          const activePrice = price.is_on_sale && price.sale_price ? price.sale_price : price.regular_price;
+                          return (
+                            <span className={`ml-auto flex-shrink-0 text-[11px] font-medium ${price.is_on_sale ? "text-red-600" : "text-gray-400"}`}>
+                              ${activePrice?.toFixed(2)}
+                              {price.is_on_sale && <span className="ml-0.5 text-[9px] bg-red-100 text-red-600 px-0.5 rounded">sale</span>}
+                            </span>
+                          );
+                        })()}
+                        {inList && !priceLookup.get(item.name.toLowerCase()) && <span className="ml-auto text-[10px] flex-shrink-0">✕ remove</span>}
                       </button>
 
                       {contextMenu?.id === item.id && (

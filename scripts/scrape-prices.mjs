@@ -23,10 +23,29 @@ const SELECTOR_TIMEOUT = 10_000;
 // ── Config Loading ─────────────────────────────────────────────────
 
 async function loadConfig() {
+  // Try fetching config from the deployed app first
+  const appUrl = process.env.APP_URL;
+  if (appUrl) {
+    try {
+      const res = await fetch(`${appUrl}/api/scrape-config`);
+      if (res.ok) {
+        const config = await res.json();
+        if (config.stores && Object.keys(config.stores).length > 0) {
+          console.log("   Config loaded from app API.");
+          return config;
+        }
+      }
+    } catch {
+      console.log("   Could not fetch config from app, falling back to local file.");
+    }
+  }
+
+  // Fallback to local file
   if (!existsSync(CONFIG_FILE)) {
     throw new Error(`Config file not found: ${CONFIG_FILE}`);
   }
   const raw = await readFile(CONFIG_FILE, "utf-8");
+  console.log("   Config loaded from local file.");
   return JSON.parse(raw);
 }
 
