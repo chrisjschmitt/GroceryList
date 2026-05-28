@@ -163,25 +163,35 @@ async function savePriceDataLocal(data) {
   console.log(`\n   Saved locally → ${OUTPUT_FILE}`);
 }
 
-async function uploadToBlob(data) {
-  if (!process.env.BLOB_READ_WRITE_TOKEN) {
-    console.log("   BLOB_READ_WRITE_TOKEN not set — skipping blob upload.");
-    console.log("   Run with BLOB_READ_WRITE_TOKEN=... to upload to Vercel Blob.");
+async function uploadToApp(data) {
+  const appUrl = process.env.APP_URL;
+  const apiKey = process.env.SCRAPER_API_KEY;
+
+  if (!appUrl || !apiKey) {
+    console.log("   APP_URL or SCRAPER_API_KEY not set — skipping upload.");
+    console.log("   Set APP_URL=https://your-app.vercel.app and SCRAPER_API_KEY=... to upload.");
     return;
   }
 
   try {
-    const { put } = await import("@vercel/blob");
-    await put("grocerylist/prices.json", JSON.stringify(data), {
-      access: "private",
-      addRandomSuffix: false,
-      allowOverwrite: true,
-      contentType: "application/json",
-      token: process.env.BLOB_READ_WRITE_TOKEN,
+    const res = await fetch(`${appUrl}/api/prices`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(data),
     });
-    console.log("   Uploaded to Vercel Blob → grocerylist/prices.json");
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`HTTP ${res.status}: ${err}`);
+    }
+
+    const result = await res.json();
+    console.log(`   Uploaded to app → ${result.items} item(s)`);
   } catch (e) {
-    console.error(`   ✗ Blob upload failed: ${e.message}`);
+    console.error(`   ✗ Upload failed: ${e.message}`);
   }
 }
 
@@ -275,7 +285,7 @@ async function main() {
 
     console.log("\n── Saving ──");
     await savePriceDataLocal(allPrices);
-    await uploadToBlob(allPrices);
+    await uploadToApp(allPrices);
 
     console.log("\n✓ Done.\n");
     console.log(JSON.stringify(allPrices, null, 2));

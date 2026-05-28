@@ -31,7 +31,8 @@ jobs:
 
       - name: Run price scraper
         env:
-          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+          APP_URL: ${{ secrets.APP_URL }}
+          SCRAPER_API_KEY: ${{ secrets.SCRAPER_API_KEY }}
         run: xvfb-run --auto-servernum npm run scrape
 
       - name: Upload price data as artifact
