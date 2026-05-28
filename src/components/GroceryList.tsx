@@ -109,6 +109,7 @@ export default function GroceryList() {
             onAddItem={store.addRegularItem}
             onEditItem={store.editRegularItem}
             onDeleteItem={store.deleteRegularItem}
+            priceLookup={priceLookup}
           />
         </section>
 

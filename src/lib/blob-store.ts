@@ -78,3 +78,33 @@ const PRICES_BLOB = "grocerylist/prices.json";
 export async function blobGetPrices(): Promise<PriceData> {
   return readBlob<PriceData>(PRICES_BLOB, {});
 }
+
+// Scrape config (managed via Admin UI, read by scraper)
+export interface ScrapeItemConfig {
+  upc: string;
+  name: string;
+  url: string;
+}
+
+export interface ScrapeStoreConfig {
+  enabled: boolean;
+  store_name: string;
+  base_url: string;
+  postal_code: string;
+  store_id: string;
+  items: ScrapeItemConfig[];
+}
+
+export type ScrapeConfig = {
+  stores: Record<string, ScrapeStoreConfig>;
+};
+
+const SCRAPE_CONFIG_BLOB = "grocerylist/scrape-config.json";
+
+export async function blobGetScrapeConfig(): Promise<ScrapeConfig> {
+  return readBlob<ScrapeConfig>(SCRAPE_CONFIG_BLOB, { stores: {} });
+}
+
+export async function blobSetScrapeConfig(config: ScrapeConfig): Promise<void> {
+  await writeBlob(SCRAPE_CONFIG_BLOB, config);
+}
