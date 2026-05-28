@@ -12,6 +12,15 @@ import { SyncMetadata } from "../blob-store";
 export type SyncStatus = "synced" | "syncing" | "offline" | "error";
 export type DirtyFlag = "grocery" | "regular";
 
+const FETCH_TIMEOUT = 10_000;
+
+function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+
+  return fetch(input, { ...init, signal: controller.signal }).finally(() => clearTimeout(timeout));
+}
+
 export async function pushDirtyToServer(dirty: Set<DirtyFlag>): Promise<{ success: boolean }> {
   if (!navigator.onLine || dirty.size === 0) {
     return { success: dirty.size === 0 };
@@ -29,7 +38,7 @@ export async function pushDirtyToServer(dirty: Set<DirtyFlag>): Promise<{ succes
       payload.regularItems = await localGetRegularItems();
     }
 
-    const res = await fetch("/api/sync", {
+    const res = await fetchWithTimeout("/api/sync", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -58,7 +67,7 @@ export async function pullFromServer(): Promise<PullResult | null> {
   if (!navigator.onLine) return null;
 
   try {
-    const res = await fetch("/api/sync");
+    const res = await fetchWithTimeout("/api/sync");
     if (!res.ok) return null;
 
     const data = await res.json();

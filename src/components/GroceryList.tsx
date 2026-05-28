@@ -7,6 +7,7 @@ import AddItemForm from "./AddItemForm";
 import GroceryItemRow from "./GroceryItemRow";
 import RegularItemsList from "./RegularItemsList";
 import SyncIndicator from "./SyncIndicator";
+import PullToRefresh from "./PullToRefresh";
 
 function groupByCategory(items: GroceryItem[]): [string, GroceryItem[]][] {
   const groups: Record<string, GroceryItem[]> = {};
@@ -48,6 +49,7 @@ export default function GroceryList() {
   const uncheckedByCategory = groupByCategory(uncheckedItems);
 
   return (
+    <PullToRefresh onRefresh={store.refreshFromServer} enabled={!store.hasPendingChanges && store.isOnline}>
     <div className="space-y-6">
       <SyncIndicator status={store.syncStatus} isOnline={store.isOnline} lastSynced={store.lastSynced} hasPendingChanges={store.hasPendingChanges} lastSavedBy={store.lastSavedBy} onSave={store.saveChanges} />
 
@@ -189,5 +191,6 @@ export default function GroceryList() {
         </section>
       </div>
     </div>
+    </PullToRefresh>
   );
 }

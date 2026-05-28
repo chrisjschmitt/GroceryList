@@ -18,6 +18,7 @@ import {
 import { pullFromServer, pushDirtyToServer, syncAllToServer, SyncStatus, DirtyFlag } from "./sync";
 import { parseCsv } from "../csv-parser";
 import { getDeviceName } from "./device-name";
+import { getAutoSaveEnabled } from "./settings";
 
 const POLL_INTERVAL = 60_000;
 
@@ -43,6 +44,7 @@ export interface OfflineStore {
   editRegularItem: (id: string, name: string) => Promise<void>;
   deleteRegularItem: (id: string) => Promise<void>;
   addSelectedToGroceryList: (items: RegularItem[]) => Promise<void>;
+  refreshFromServer: () => Promise<void>;
 }
 
 export function useOfflineStore(): OfflineStore {
@@ -155,11 +157,11 @@ export function useOfflineStore(): OfflineStore {
     return () => clearInterval(interval);
   }, [pullAndUpdate]);
 
-  // Auto-save when leaving, pull when returning
+  // Auto-save when leaving (if enabled), pull when returning
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === "hidden") {
-        if (dirtyRef.current.size > 0 && navigator.onLine) {
+        if (getAutoSaveEnabled() && dirtyRef.current.size > 0 && navigator.onLine) {
           saveChanges();
         }
       } else if (document.visibilityState === "visible" && navigator.onLine) {
@@ -379,5 +381,6 @@ export function useOfflineStore(): OfflineStore {
     editRegularItem,
     deleteRegularItem,
     addSelectedToGroceryList,
+    refreshFromServer: pullAndUpdate,
   };
 }
