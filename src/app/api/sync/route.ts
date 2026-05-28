@@ -4,17 +4,19 @@ import {
   blobGetGroceryItems, blobSetGroceryItems,
   blobGetRegularItems, blobSetRegularItems,
   blobGetSyncMeta, blobSetSyncMeta,
+  blobGetPrices,
 } from "@/lib/blob-store";
 
 export async function GET() {
   try {
-    const [groceryItems, regularItems, syncMeta] = await Promise.all([
+    const [groceryItems, regularItems, syncMeta, prices] = await Promise.all([
       blobGetGroceryItems(),
       blobGetRegularItems(),
       blobGetSyncMeta(),
+      blobGetPrices(),
     ]);
 
-    return NextResponse.json({ groceryItems, regularItems, syncMeta });
+    return NextResponse.json({ groceryItems, regularItems, syncMeta, prices });
   } catch (err) {
     return NextResponse.json(
       { error: "Failed to read from blob store", details: String(err) },

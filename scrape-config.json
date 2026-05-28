@@ -1,0 +1,18 @@
+{
+  "stores": {
+    "foodbasics": {
+      "enabled": true,
+      "store_name": "Food Basics",
+      "base_url": "https://www.foodbasics.ca",
+      "postal_code": "K7H3C6",
+      "store_id": "7923194",
+      "items": [
+        {
+          "upc": "068200148434",
+          "name": "2% Lactose-Free Milk",
+          "url": "https://www.foodbasics.ca/aisles/dairy-eggs/milk-cream-butter/lactose-free-non-dairy-milk/2-lactose-free-milk/p/068200148434"
+        }
+      ]
+    }
+  }
+}

@@ -16,6 +16,7 @@ import {
   localRemoveRegularItem,
 } from "./local-db";
 import { pullFromServer, pushDirtyToServer, syncAllToServer, SyncStatus, DirtyFlag } from "./sync";
+import { PriceData } from "../blob-store";
 import { parseCsv } from "../csv-parser";
 import { getDeviceName } from "./device-name";
 import { getAutoSaveEnabled } from "./settings";
@@ -30,6 +31,7 @@ export interface OfflineStore {
   lastSynced: Date | null;
   lastSavedBy: string | null;
   hasPendingChanges: boolean;
+  prices: PriceData;
   saveChanges: () => Promise<void>;
   addGroceryItem: (name: string, quantity: number, unit: string, category?: string) => Promise<void>;
   toggleGroceryItem: (id: string) => Promise<void>;
@@ -55,6 +57,7 @@ export function useOfflineStore(): OfflineStore {
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
   const [lastSavedBy, setLastSavedBy] = useState<string | null>(null);
   const [hasPendingChanges, setHasPendingChanges] = useState(false);
+  const [prices, setPrices] = useState<PriceData>({});
 
   const dirtyRef = useRef<Set<DirtyFlag>>(new Set());
 
@@ -98,6 +101,7 @@ export function useOfflineStore(): OfflineStore {
     if (serverData) {
       setGroceryItems(serverData.groceryItems);
       setRegularItems(serverData.regularItems);
+      setPrices(serverData.prices);
       markSynced(serverData.syncMeta?.lastSavedBy || undefined);
     }
   }, [markSynced]);
@@ -134,6 +138,7 @@ export function useOfflineStore(): OfflineStore {
       if (serverHasData) {
         setGroceryItems(serverData.groceryItems);
         setRegularItems(serverData.regularItems);
+        setPrices(serverData.prices);
         markSynced(serverData.syncMeta?.lastSavedBy || undefined);
       } else if (localHasData) {
         const result = await syncAllToServer();
@@ -348,6 +353,7 @@ export function useOfflineStore(): OfflineStore {
     lastSynced,
     lastSavedBy,
     hasPendingChanges,
+    prices,
     saveChanges,
     addGroceryItem,
     toggleGroceryItem,
