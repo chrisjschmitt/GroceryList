@@ -62,6 +62,7 @@ export async function blobSetSyncMeta(meta: SyncMetadata): Promise<void> {
 // Price data (written by scraper, read by app)
 export interface PriceEntry {
   item_name: string;
+  config_name: string;
   store_name: string;
   postal_code: string;
   store_id: string;
