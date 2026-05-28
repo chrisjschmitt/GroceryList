@@ -58,3 +58,23 @@ export async function blobGetSyncMeta(): Promise<SyncMetadata | null> {
 export async function blobSetSyncMeta(meta: SyncMetadata): Promise<void> {
   await writeBlob(SYNC_META_BLOB, meta);
 }
+
+// Price data (written by scraper, read by app)
+export interface PriceEntry {
+  item_name: string;
+  store_name: string;
+  postal_code: string;
+  store_id: string;
+  regular_price: number | null;
+  sale_price: number | null;
+  is_on_sale: number;
+  last_updated: string;
+}
+
+export type PriceData = Record<string, PriceEntry>;
+
+const PRICES_BLOB = "grocerylist/prices.json";
+
+export async function blobGetPrices(): Promise<PriceData> {
+  return readBlob<PriceData>(PRICES_BLOB, {});
+}

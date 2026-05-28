@@ -1,13 +1,13 @@
 /**
- * Food Basics Price Scraper
+ * Grocery Price Scraper
  *
- * Extracts current pricing for a grocery item from foodbasics.ca,
- * localizing to the nearest store via postal code.
+ * Reads scrape-config.json for store/item definitions, scrapes prices
+ * from each enabled store, saves to local grocery_prices.json, and
+ * uploads to Vercel Blob for the app to read.
  *
  * Usage:
- *   node scripts/scrape-prices.mjs
- *
- * In a future release, target parameters will come from a lookup table.
+ *   npm run scrape                           # scrape all enabled stores
+ *   BLOB_READ_WRITE_TOKEN=... npm run scrape # also upload to Vercel Blob
  */
 
 import { chromium } from "playwright";
@@ -15,18 +15,20 @@ import { readFile, writeFile } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
 
-// ── Target Parameters (future: from lookup table) ──────────────────
-
-const TARGET_UPC = "068200148434";
-const TARGET_POSTAL_CODE = "K7H3C6";
-const TARGET_STORE_ID = "7923194";
-const TARGET_URL =
-  "https://www.foodbasics.ca/aisles/dairy-eggs/milk-cream-butter/lactose-free-non-dairy-milk/2-lactose-free-milk/p/068200148434";
-const STORE_LOCATOR_URL = "https://www.foodbasics.ca/store-locator";
-
+const CONFIG_FILE = path.join(process.cwd(), "scrape-config.json");
 const OUTPUT_FILE = path.join(process.cwd(), "grocery_prices.json");
 const NAVIGATION_TIMEOUT = 30_000;
 const SELECTOR_TIMEOUT = 10_000;
+
+// ── Config Loading ─────────────────────────────────────────────────
+
+async function loadConfig() {
+  if (!existsSync(CONFIG_FILE)) {
+    throw new Error(`Config file not found: ${CONFIG_FILE}`);
+  }
+  const raw = await readFile(CONFIG_FILE, "utf-8");
+  return JSON.parse(raw);
+}
 
 // ── Browser Setup ──────────────────────────────────────────────────
 
@@ -49,7 +51,6 @@ async function createBrowser() {
   });
 
   const page = await context.newPage();
-
   await page.addInitScript(() => {
     Object.defineProperty(navigator, "webdriver", { get: () => false });
   });
@@ -57,151 +58,131 @@ async function createBrowser() {
   return { browser, context, page };
 }
 
-// ── Step 1: Session Initialization & Store Localization ────────────
+// ── Food Basics Scraper ────────────────────────────────────────────
 
-async function localizeStore(page, context) {
-  console.log(`[1/3] Localizing to store ${TARGET_STORE_ID} near ${TARGET_POSTAL_CODE}...`);
+async function scrapeFoodBasics(page, context, storeConfig) {
+  const { store_id, postal_code, store_name, base_url, items } = storeConfig;
 
-  // Inject store cookies directly — more reliable than navigating the store locator
-  await injectStoreCookies(context);
+  // Inject store cookies
+  const domain = new URL(base_url).hostname;
+  await context.addCookies([
+    { name: "storeId", value: store_id, domain: `.${domain}`, path: "/" },
+    { name: "selectedStoreId", value: store_id, domain: `.${domain}`, path: "/" },
+  ]);
+  console.log(`   Store cookies injected (${store_id}).`);
 
-  // Warm up the session by loading any page (clears Cloudflare challenge)
-  await page.goto("https://www.foodbasics.ca/", {
+  // Warm session through Cloudflare
+  await page.goto(base_url, {
     waitUntil: "domcontentloaded",
     timeout: NAVIGATION_TIMEOUT,
   });
   await waitForChallenge(page);
   console.log("   Session initialized.");
-}
 
-async function injectStoreCookies(context) {
-  await context.addCookies([
-    {
-      name: "storeId",
-      value: TARGET_STORE_ID,
-      domain: ".foodbasics.ca",
-      path: "/",
-    },
-    {
-      name: "selectedStoreId",
-      value: TARGET_STORE_ID,
-      domain: ".foodbasics.ca",
-      path: "/",
-    },
-  ]);
-  console.log("   Store cookies injected.");
-}
+  const results = {};
 
-// ── Step 2: Price Extraction ───────────────────────────────────────
+  for (const item of items) {
+    console.log(`\n   Scraping: ${item.name} (${item.upc})...`);
 
-async function extractPrices(page) {
-  console.log(`[2/3] Extracting prices from product page...`);
-
-  await page.goto(TARGET_URL, {
-    waitUntil: "domcontentloaded",
-    timeout: NAVIGATION_TIMEOUT,
-  });
-
-  await waitForChallenge(page);
-
-  // Wait for challenge to clear on product page
-  await waitForChallenge(page);
-  await page.waitForTimeout(3000);
-
-  // Debug: dump page state
-  const currentUrl = page.url();
-  const bodyLen = (await page.locator("body").textContent().catch(() => ""))?.length || 0;
-  console.log(`   Page URL: ${currentUrl}`);
-  console.log(`   Body text length: ${bodyLen}`);
-
-  // Wait for the price section to render
-  try {
-    await page.locator(".pi--prices").first().waitFor({
-      state: "visible",
-      timeout: SELECTOR_TIMEOUT,
-    });
-  } catch {
-    // Save screenshot for debugging
-    await page.screenshot({ path: "/tmp/scraper-error.png" }).catch(() => {});
-    const snippet = (await page.locator("body").textContent().catch(() => ""))?.substring(0, 500);
-    throw new Error(
-      `Price section (.pi--prices) not found. Body: ${snippet}`
-    );
-  }
-
-  // Extract product name
-  const itemName = await safeText(page, "h1");
-  if (!itemName) {
-    throw new Error("Could not extract product name from <h1>.");
-  }
-
-  // Extract regular price from .pricing__before-price
-  // The structure is: <span class="invisible-text">Regular price</span><span>$6.69</span>
-  const regularPriceText = await page.locator(".pricing__before-price span:not(.invisible-text)").first().textContent().catch(() => null);
-  const regularPrice = parsePrice(regularPriceText);
-
-  // Check if item is on sale (presence of sale price or sale icon)
-  const hasSalePrice = (await page.locator(".pricing__sale-price.promo-price").count()) > 0;
-  const hasSaleIcon = (await page.locator(".icon--sale").count()) > 0;
-  const isOnSale = hasSalePrice || hasSaleIcon;
-
-  // Extract sale price from data attribute or DOM
-  let salePrice = null;
-  if (isOnSale) {
-    // Try data attribute first (most reliable)
-    const mainPriceAttr = await page.locator("[data-main-price]").first().getAttribute("data-main-price").catch(() => null);
-    if (mainPriceAttr) {
-      salePrice = parseFloat(mainPriceAttr);
-    }
-
-    // Fallback to DOM text
-    if (!salePrice) {
-      const salePriceText = await safeText(page, ".pricing__sale-price .price-update");
-      salePrice = parsePrice(salePriceText);
-    }
-  }
-
-  // If not on sale, the "regular" price is the active price
-  const activePrice = isOnSale ? salePrice : regularPrice;
-
-  console.log(`   Product: ${itemName}`);
-  console.log(`   Regular: $${regularPrice?.toFixed(2) ?? "N/A"}`);
-  console.log(`   Sale:    $${salePrice?.toFixed(2) ?? "N/A"}`);
-  console.log(`   On sale: ${isOnSale ? "Yes" : "No"}`);
-  console.log(`   Active:  $${activePrice?.toFixed(2) ?? "N/A"}`);
-
-  return {
-    item_name: itemName,
-    store_name: "Food Basics",
-    postal_code: TARGET_POSTAL_CODE,
-    store_id: TARGET_STORE_ID,
-    regular_price: regularPrice,
-    sale_price: isOnSale ? salePrice : null,
-    is_on_sale: isOnSale ? 1 : 0,
-    last_updated: new Date().toISOString(),
-  };
-}
-
-// ── Step 3: Data Storage ───────────────────────────────────────────
-
-async function savePriceData(upc, data) {
-  console.log(`[3/3] Saving to ${OUTPUT_FILE}...`);
-
-  let existing = {};
-
-  if (existsSync(OUTPUT_FILE)) {
     try {
-      const raw = await readFile(OUTPUT_FILE, "utf-8");
-      existing = JSON.parse(raw);
+      await page.goto(item.url, {
+        waitUntil: "domcontentloaded",
+        timeout: NAVIGATION_TIMEOUT,
+      });
+      await waitForChallenge(page);
+      await page.waitForTimeout(2000);
+
+      // Wait for price section
+      await page.locator(".pi--prices").first().waitFor({
+        state: "visible",
+        timeout: SELECTOR_TIMEOUT,
+      });
+
+      // Product name
+      const itemName = await safeText(page, "h1") || item.name;
+
+      // Regular price
+      const regularPriceText = await page
+        .locator(".pricing__before-price span:not(.invisible-text)")
+        .first().textContent().catch(() => null);
+      const regularPrice = parsePrice(regularPriceText);
+
+      // Sale detection
+      const hasSalePrice = (await page.locator(".pricing__sale-price.promo-price").count()) > 0;
+      const hasSaleIcon = (await page.locator(".icon--sale").count()) > 0;
+      const isOnSale = hasSalePrice || hasSaleIcon;
+
+      // Sale price
+      let salePrice = null;
+      if (isOnSale) {
+        const mainPriceAttr = await page
+          .locator("[data-main-price]").first()
+          .getAttribute("data-main-price").catch(() => null);
+        if (mainPriceAttr) salePrice = parseFloat(mainPriceAttr);
+
+        if (!salePrice) {
+          const salePriceText = await safeText(page, ".pricing__sale-price .price-update");
+          salePrice = parsePrice(salePriceText);
+        }
+      }
+
+      results[item.upc] = {
+        item_name: itemName,
+        store_name: store_name,
+        postal_code: postal_code,
+        store_id: store_id,
+        regular_price: regularPrice,
+        sale_price: isOnSale ? salePrice : null,
+        is_on_sale: isOnSale ? 1 : 0,
+        last_updated: new Date().toISOString(),
+      };
+
+      const active = isOnSale ? salePrice : regularPrice;
+      console.log(`     $${regularPrice?.toFixed(2) ?? "?"} regular → $${active?.toFixed(2) ?? "?"} active${isOnSale ? " (SALE)" : ""}`);
     } catch (e) {
-      console.warn(`   Warning: Could not parse existing file, overwriting. (${e.message})`);
+      console.error(`     ✗ Failed: ${e.message}`);
     }
   }
 
-  existing[upc] = data;
+  return results;
+}
 
-  await writeFile(OUTPUT_FILE, JSON.stringify(existing, null, 2), "utf-8");
-  console.log(`   Saved ${upc} → ${OUTPUT_FILE}`);
+// ── Data Storage ───────────────────────────────────────────────────
+
+async function loadPriceData() {
+  if (!existsSync(OUTPUT_FILE)) return {};
+  try {
+    return JSON.parse(await readFile(OUTPUT_FILE, "utf-8"));
+  } catch {
+    return {};
+  }
+}
+
+async function savePriceDataLocal(data) {
+  await writeFile(OUTPUT_FILE, JSON.stringify(data, null, 2), "utf-8");
+  console.log(`\n   Saved locally → ${OUTPUT_FILE}`);
+}
+
+async function uploadToBlob(data) {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    console.log("   BLOB_READ_WRITE_TOKEN not set — skipping blob upload.");
+    console.log("   Run with BLOB_READ_WRITE_TOKEN=... to upload to Vercel Blob.");
+    return;
+  }
+
+  try {
+    const { put } = await import("@vercel/blob");
+    await put("grocerylist/prices.json", JSON.stringify(data), {
+      access: "private",
+      addRandomSuffix: false,
+      allowOverwrite: true,
+      contentType: "application/json",
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+    });
+    console.log("   Uploaded to Vercel Blob → grocerylist/prices.json");
+  } catch (e) {
+    console.error(`   ✗ Blob upload failed: ${e.message}`);
+  }
 }
 
 // ── Utilities ──────────────────────────────────────────────────────
@@ -221,15 +202,12 @@ async function waitForChallenge(page) {
       bodyText?.includes("Enable JavaScript and cookies to continue") ||
       bodyText?.includes("cf-chl-widget");
 
-    // Real content: not a challenge page AND has substantial unique site content
     const hasRealContent =
       !isChallenge &&
       bodyText &&
       (bodyText.includes("Food Basics") || bodyText.includes("METRO") || bodyText.includes("Add to cart"));
 
-    if (hasRealContent) {
-      return;
-    }
+    if (hasRealContent) return;
 
     const elapsed = Date.now() - start;
     if (elapsed - lastLog > 5000) {
@@ -263,20 +241,44 @@ function parsePrice(text) {
 // ── Main ───────────────────────────────────────────────────────────
 
 async function main() {
+  const config = await loadConfig();
+  const enabledStores = Object.entries(config.stores).filter(([, s]) => s.enabled);
+
+  if (enabledStores.length === 0) {
+    console.log("No enabled stores in scrape-config.json.");
+    return;
+  }
+
+  const totalItems = enabledStores.reduce((n, [, s]) => n + s.items.length, 0);
   console.log("═══════════════════════════════════════════════════");
-  console.log("  Food Basics Price Scraper");
-  console.log(`  UPC: ${TARGET_UPC} | Postal: ${TARGET_POSTAL_CODE}`);
-  console.log("═══════════════════════════════════════════════════\n");
+  console.log("  Grocery Price Scraper");
+  console.log(`  ${enabledStores.length} store(s), ${totalItems} item(s)`);
+  console.log("═══════════════════════════════════════════════════");
 
   const { browser, context, page } = await createBrowser();
+  let allPrices = await loadPriceData();
 
   try {
-    await localizeStore(page, context);
-    const priceData = await extractPrices(page);
-    await savePriceData(TARGET_UPC, priceData);
+    for (const [storeKey, storeConfig] of enabledStores) {
+      console.log(`\n── ${storeConfig.store_name} (${storeKey}) ──`);
+
+      let results = {};
+      if (storeKey === "foodbasics") {
+        results = await scrapeFoodBasics(page, context, storeConfig);
+      } else {
+        console.log(`   Scraper not implemented for "${storeKey}" — skipping.`);
+        continue;
+      }
+
+      allPrices = { ...allPrices, ...results };
+    }
+
+    console.log("\n── Saving ──");
+    await savePriceDataLocal(allPrices);
+    await uploadToBlob(allPrices);
 
     console.log("\n✓ Done.\n");
-    console.log(JSON.stringify({ [TARGET_UPC]: priceData }, null, 2));
+    console.log(JSON.stringify(allPrices, null, 2));
   } catch (error) {
     console.error(`\n✗ Error: ${error.message}`);
     process.exitCode = 1;

@@ -1,14 +1,16 @@
 "use client";
 
 import { GroceryItem } from "@/lib/types";
+import { PriceEntry } from "@/lib/blob-store";
 
 interface GroceryItemRowProps {
   item: GroceryItem;
   onToggle: (id: string) => void;
   onRemove: (id: string) => void;
+  priceInfo?: PriceEntry;
 }
 
-export default function GroceryItemRow({ item, onToggle, onRemove }: GroceryItemRowProps) {
+export default function GroceryItemRow({ item, onToggle, onRemove, priceInfo }: GroceryItemRowProps) {
   return (
     <div className="group flex items-start gap-2 py-0.5">
       <button
@@ -28,10 +30,20 @@ export default function GroceryItemRow({ item, onToggle, onRemove }: GroceryItem
         )}
       </button>
 
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 flex items-baseline gap-1.5">
         <span className={`text-sm leading-tight ${item.checked ? "line-through text-gray-400" : "text-gray-900"}`}>
           {item.name}
         </span>
+
+        {priceInfo && !item.checked && (
+          <span className={`text-xs font-medium ${priceInfo.is_on_sale ? "text-red-600" : "text-gray-500"}`}>
+            ${(priceInfo.is_on_sale && priceInfo.sale_price ? priceInfo.sale_price : priceInfo.regular_price)?.toFixed(2)}
+            {priceInfo.is_on_sale && (
+              <span className="ml-0.5 text-[10px] bg-red-100 text-red-600 px-1 rounded">sale</span>
+            )}
+            <span className="text-gray-400 font-normal ml-0.5">{priceInfo.store_name}</span>
+          </span>
+        )}
       </div>
 
       <button

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useOfflineStore } from "@/lib/client/use-offline-store";
 import { GroceryItem } from "@/lib/types";
+import { PriceEntry } from "@/lib/blob-store";
 import AddItemForm from "./AddItemForm";
 import GroceryItemRow from "./GroceryItemRow";
 import RegularItemsList from "./RegularItemsList";
@@ -29,6 +30,15 @@ export default function GroceryList() {
     () => new Set(store.groceryItems.map((i) => i.name.toLowerCase())),
     [store.groceryItems]
   );
+
+  // Build name → price lookup from scraped data
+  const priceLookup = useMemo(() => {
+    const map = new Map<string, PriceEntry>();
+    for (const entry of Object.values(store.prices)) {
+      map.set(entry.item_name.toLowerCase(), entry);
+    }
+    return map;
+  }, [store.prices]);
 
   const handleAdd = async (name: string, quantity: number, unit: string) => {
     if (shoppingListNames.has(name.toLowerCase())) return;
@@ -150,6 +160,7 @@ export default function GroceryList() {
                           item={item}
                           onToggle={store.toggleGroceryItem}
                           onRemove={store.removeGroceryItem}
+                          priceInfo={priceLookup.get(item.name.toLowerCase())}
                         />
                       ))}
                     </div>
