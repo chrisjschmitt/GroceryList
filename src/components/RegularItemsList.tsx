@@ -120,6 +120,7 @@ export default function RegularItemsList({
   const categories = items.reduce<Record<string, RegularItem[]>>((acc, item) => {
     if (!acc[item.category]) acc[item.category] = [];
     acc[item.category].push(item);
+    acc[item.category].sort((a, b) => a.name.localeCompare(b.name));
     return acc;
   }, {});
 

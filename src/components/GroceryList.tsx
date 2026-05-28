@@ -15,7 +15,9 @@ function groupByCategory(items: GroceryItem[]): [string, GroceryItem[]][] {
     if (!groups[cat]) groups[cat] = [];
     groups[cat].push(item);
   }
-  return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+  return Object.entries(groups)
+    .map(([cat, items]) => [cat, items.sort((a, b) => a.name.localeCompare(b.name))] as [string, GroceryItem[]])
+    .sort(([a], [b]) => a.localeCompare(b));
 }
 
 export default function GroceryList() {
