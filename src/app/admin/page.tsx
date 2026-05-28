@@ -4,10 +4,20 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { RegularItem } from "@/lib/types";
 import CsvUpload from "@/components/CsvUpload";
+import { getAutoSaveEnabled, setAutoSaveEnabled } from "@/lib/client/settings";
 
 export default function AdminPage() {
   const [items, setItems] = useState<RegularItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [autoSave, setAutoSave] = useState(() =>
+    typeof window !== "undefined" ? getAutoSaveEnabled() : true
+  );
+
+  const handleAutoSaveToggle = () => {
+    const newValue = !autoSave;
+    setAutoSave(newValue);
+    setAutoSaveEnabled(newValue);
+  };
 
   const fetchItems = async () => {
     try {
@@ -75,6 +85,32 @@ export default function AdminPage() {
         </header>
 
         <section className="space-y-6">
+          {/* Settings */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Settings</h2>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-700">Auto-save on leave</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Automatically save changes when you switch away from the app. Uses Vercel Blob put() operations.
+                </p>
+              </div>
+              <button
+                onClick={handleAutoSaveToggle}
+                className={`relative w-11 h-6 rounded-full transition-colors ${
+                  autoSave ? "bg-emerald-500" : "bg-gray-300"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                    autoSave ? "translate-x-5" : ""
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
+          {/* CSV Upload */}
           <div>
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
               Upload Regular Items
