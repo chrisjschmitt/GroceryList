@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { GroceryItem, RegularItem, StorePrice } from "../types";
+import { GroceryItem, RegularItem } from "../types";
 import {
   localGetGroceryItems,
   localAddGroceryItem,
@@ -199,9 +199,6 @@ export function useOfflineStore(): OfflineStore {
       return;
     }
 
-    const prices: StorePrice[] = [];
-    const bestPrice: StorePrice | undefined = undefined;
-
     const newItem: GroceryItem = {
       id: `item-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       name,
@@ -209,26 +206,10 @@ export function useOfflineStore(): OfflineStore {
       quantity,
       unit,
       checked: false,
-      prices,
-      bestPrice,
+      prices: [],
+      bestPrice: undefined,
       createdAt: new Date().toISOString(),
     };
-
-    if (navigator.onLine) {
-      try {
-        const res = await fetch("/api/items", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, quantity, unit, category }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          Object.assign(newItem, data.item);
-        }
-      } catch {
-        // use item without prices
-      }
-    }
 
     await localAddGroceryItem(newItem);
     setGroceryItems((prev) => [...prev, newItem]);
