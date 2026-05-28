@@ -41,6 +41,12 @@ A personal grocery list web app that checks local stores for the lowest prices f
 
 ### PR and merge policy
 
+### Versioning
+
+- Bump `version` in `package.json` with every PR (semver: patch for fixes, minor for features)
+- The version displays in the app header automatically
+- After merging, tag the release: `git tag -a vX.Y.Z -m "vX.Y.Z — summary"` and push the tag
+
 - **Merge PRs directly.** This is a personal app — do not leave PRs as drafts. Create the PR as ready and merge it after verifying lint/test/build pass.
 
 ### Testing policy
