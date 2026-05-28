@@ -6,6 +6,8 @@ import {
   localSetRegularItems,
   setLastSyncTime,
 } from "./local-db";
+import { getDeviceName } from "./device-name";
+import { SyncMetadata } from "../blob-store";
 
 export type SyncStatus = "synced" | "syncing" | "offline" | "error";
 export type DirtyFlag = "grocery" | "regular";
@@ -16,7 +18,9 @@ export async function pushDirtyToServer(dirty: Set<DirtyFlag>): Promise<{ succes
   }
 
   try {
-    const payload: Record<string, unknown> = {};
+    const payload: Record<string, unknown> = {
+      deviceName: getDeviceName(),
+    };
 
     if (dirty.has("grocery")) {
       payload.groceryItems = await localGetGroceryItems();
@@ -44,10 +48,13 @@ export async function syncAllToServer(): Promise<{ success: boolean }> {
   return pushDirtyToServer(new Set(["grocery", "regular"]));
 }
 
-export async function pullFromServer(): Promise<{
+export interface PullResult {
   groceryItems: GroceryItem[];
   regularItems: RegularItem[];
-} | null> {
+  syncMeta: SyncMetadata | null;
+}
+
+export async function pullFromServer(): Promise<PullResult | null> {
   if (!navigator.onLine) return null;
 
   try {
@@ -57,12 +64,13 @@ export async function pullFromServer(): Promise<{
     const data = await res.json();
     const groceryItems: GroceryItem[] = data.groceryItems || [];
     const regularItems: RegularItem[] = data.regularItems || [];
+    const syncMeta: SyncMetadata | null = data.syncMeta || null;
 
     await localSetGroceryItems(groceryItems);
     await localSetRegularItems(regularItems);
     await setLastSyncTime(Date.now());
 
-    return { groceryItems, regularItems };
+    return { groceryItems, regularItems, syncMeta };
   } catch {
     return null;
   }

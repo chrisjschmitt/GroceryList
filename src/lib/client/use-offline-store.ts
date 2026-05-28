@@ -17,6 +17,7 @@ import {
 } from "./local-db";
 import { pullFromServer, pushDirtyToServer, syncAllToServer, SyncStatus, DirtyFlag } from "./sync";
 import { parseCsv } from "../csv-parser";
+import { getDeviceName } from "./device-name";
 
 const POLL_INTERVAL = 60_000;
 
@@ -26,6 +27,7 @@ export interface OfflineStore {
   syncStatus: SyncStatus;
   isOnline: boolean;
   lastSynced: Date | null;
+  lastSavedBy: string | null;
   hasPendingChanges: boolean;
   saveChanges: () => Promise<void>;
   addGroceryItem: (name: string, quantity: number, unit: string, category?: string) => Promise<void>;
@@ -49,14 +51,16 @@ export function useOfflineStore(): OfflineStore {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("synced");
   const [isOnline, setIsOnline] = useState(true);
   const [lastSynced, setLastSynced] = useState<Date | null>(null);
+  const [lastSavedBy, setLastSavedBy] = useState<string | null>(null);
   const [hasPendingChanges, setHasPendingChanges] = useState(false);
 
   const dirtyRef = useRef<Set<DirtyFlag>>(new Set());
 
-  const markSynced = useCallback(() => {
+  const markSynced = useCallback((savedBy?: string) => {
     setSyncStatus("synced");
     setLastSynced(new Date());
     setHasPendingChanges(false);
+    if (savedBy) setLastSavedBy(savedBy);
   }, []);
 
   const markDirty = useCallback((flag: DirtyFlag) => {
@@ -78,7 +82,7 @@ export function useOfflineStore(): OfflineStore {
     const result = await pushDirtyToServer(toFlush);
 
     if (result.success) {
-      markSynced();
+      markSynced(getDeviceName());
     } else {
       toFlush.forEach((f) => dirtyRef.current.add(f));
       setHasPendingChanges(true);
@@ -92,7 +96,7 @@ export function useOfflineStore(): OfflineStore {
     if (serverData) {
       setGroceryItems(serverData.groceryItems);
       setRegularItems(serverData.regularItems);
-      markSynced();
+      markSynced(serverData.syncMeta?.lastSavedBy || undefined);
     }
   }, [markSynced]);
 
@@ -128,11 +132,11 @@ export function useOfflineStore(): OfflineStore {
       if (serverHasData) {
         setGroceryItems(serverData.groceryItems);
         setRegularItems(serverData.regularItems);
-        markSynced();
+        markSynced(serverData.syncMeta?.lastSavedBy || undefined);
       } else if (localHasData) {
         const result = await syncAllToServer();
         if (result.success) {
-          markSynced();
+          markSynced(getDeviceName());
         } else {
           setSyncStatus("offline");
         }
@@ -359,6 +363,7 @@ export function useOfflineStore(): OfflineStore {
     syncStatus,
     isOnline,
     lastSynced,
+    lastSavedBy,
     hasPendingChanges,
     saveChanges,
     addGroceryItem,

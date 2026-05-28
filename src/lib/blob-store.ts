@@ -42,3 +42,19 @@ export async function blobGetRegularItems(): Promise<RegularItem[]> {
 export async function blobSetRegularItems(items: RegularItem[]): Promise<void> {
   await writeBlob(REGULAR_BLOB, items);
 }
+
+// Sync metadata
+export interface SyncMetadata {
+  lastSavedBy: string;
+  lastSavedAt: string;
+}
+
+const SYNC_META_BLOB = "grocerylist/sync-meta.json";
+
+export async function blobGetSyncMeta(): Promise<SyncMetadata | null> {
+  return readBlob<SyncMetadata | null>(SYNC_META_BLOB, null);
+}
+
+export async function blobSetSyncMeta(meta: SyncMetadata): Promise<void> {
+  await writeBlob(SYNC_META_BLOB, meta);
+}

@@ -7,6 +7,7 @@ interface SyncIndicatorProps {
   status: SyncStatus;
   isOnline: boolean;
   lastSynced: Date | null;
+  lastSavedBy: string | null;
   hasPendingChanges: boolean;
   onSave: () => Promise<void>;
 }
@@ -34,7 +35,7 @@ function useTimeAgo(date: Date | null): string {
   return timeAgo(date);
 }
 
-export default function SyncIndicator({ status, isOnline, lastSynced, hasPendingChanges, onSave }: SyncIndicatorProps) {
+export default function SyncIndicator({ status, isOnline, lastSynced, lastSavedBy, hasPendingChanges, onSave }: SyncIndicatorProps) {
   const [saving, setSaving] = useState(false);
   const ago = useTimeAgo(lastSynced);
 
@@ -44,7 +45,8 @@ export default function SyncIndicator({ status, isOnline, lastSynced, hasPending
     setSaving(false);
   };
 
-  const lastSyncedLabel = ago ? ` · last saved ${ago}` : "";
+  const byDevice = lastSavedBy ? ` by ${lastSavedBy}` : "";
+  const lastSyncedLabel = ago ? ` · last saved${byDevice} ${ago}` : "";
 
   if (saving) {
     return (
@@ -82,7 +84,7 @@ export default function SyncIndicator({ status, isOnline, lastSynced, hasPending
   return (
     <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border text-emerald-700 bg-emerald-50 border-emerald-200">
       <span className="w-2 h-2 rounded-full bg-emerald-400" />
-      <span>Synced{ago ? ` · ${ago}` : ""}</span>
+      <span>Synced{ago ? ` · ${ago}${byDevice}` : ""}</span>
     </div>
   );
 }

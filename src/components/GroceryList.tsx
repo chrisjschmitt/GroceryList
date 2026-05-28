@@ -49,7 +49,7 @@ export default function GroceryList() {
 
   return (
     <div className="space-y-6">
-      <SyncIndicator status={store.syncStatus} isOnline={store.isOnline} lastSynced={store.lastSynced} hasPendingChanges={store.hasPendingChanges} onSave={store.saveChanges} />
+      <SyncIndicator status={store.syncStatus} isOnline={store.isOnline} lastSynced={store.lastSynced} hasPendingChanges={store.hasPendingChanges} lastSavedBy={store.lastSavedBy} onSave={store.saveChanges} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Grocery Items checklist */}
