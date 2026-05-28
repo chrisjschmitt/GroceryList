@@ -1,5 +1,6 @@
 import Link from "next/link";
 import GroceryList from "@/components/GroceryList";
+import packageJson from "../../package.json";
 
 export default function Home() {
   return (
@@ -11,12 +12,15 @@ export default function Home() {
               <span>🛒</span>
               <span>GroceryList</span>
             </h1>
-            <Link
-              href="/admin"
-              className="text-sm text-gray-500 hover:text-gray-700 font-medium flex items-center gap-1"
-            >
-              ⚙️ Admin
-            </Link>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-gray-400">v{packageJson.version}</span>
+              <Link
+                href="/admin"
+                className="text-sm text-gray-500 hover:text-gray-700 font-medium flex items-center gap-1"
+              >
+                ⚙️ Admin
+              </Link>
+            </div>
           </div>
           <p className="mt-2 text-gray-500">
             Compare prices across local stores and save on your grocery bill
