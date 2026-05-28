@@ -147,6 +147,7 @@ async function scrapeFoodBasics(page, context, storeConfig) {
 
       results[item.upc] = {
         item_name: itemName,
+        config_name: item.name,
         store_name: store_name,
         postal_code: postal_code,
         store_id: store_id,

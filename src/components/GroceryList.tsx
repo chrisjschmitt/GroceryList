@@ -31,10 +31,11 @@ export default function GroceryList() {
     [store.groceryItems]
   );
 
-  // Build name → price lookup from scraped data
+  // Build name → price lookup from scraped data (match on config_name and item_name)
   const priceLookup = useMemo(() => {
     const map = new Map<string, PriceEntry>();
     for (const entry of Object.values(store.prices)) {
+      if (entry.config_name) map.set(entry.config_name.toLowerCase(), entry);
       map.set(entry.item_name.toLowerCase(), entry);
     }
     return map;
